@@ -311,7 +311,7 @@ The key must match the server's `mldsa65Seed`. If the key is wrong or ML-DSA-65 
 
 ### XHTTP Flow Control (h2-flow)
 
-For hosts with the XHTTP transport, Prizrak-Core can enable the [HTTP/2 flow governor](/prizrak-core/#http2-flow-governor-h2-flow). With it, the server sends data no faster than the client reads it and does not fill large HTTP/2 windows. This lowers memory use on the client and helps on weak devices. The Xray server needs no setup: the governor works on the client side through standard HTTP/2 flow control.
+For hosts with the XHTTP transport, Prizrak-Core can enable the [HTTP/2 flow governor](/prizrak-core/#http2-flow-governor-h2-flow). With it, the server sends data no faster than the client reads it and does not fill large HTTP/2 windows. This lowers memory use on the client and helps on weak devices. The Xray server needs no setup: the governor works on the client side through standard HTTP/2 flow control. If the server runs [Jolymmiles/Xray-core](https://github.com/Jolymmiles/Xray-core) with its own governor (`h2Flow`), the two work together, and the governor can be on either side or on both.
 
 The governor is off by default and works only in h2 mode, that is ALPN `h2` or an empty ALPN. With ALPN `h3` or `http/1.1` the option has no effect.
 
