@@ -1,13 +1,13 @@
 module github.com/legiz-ru/prizrak-box-wails
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/go-ole/go-ole v1.3.0
 	github.com/godbus/dbus/v5 v5.2.2
-	github.com/wailsapp/wails/v3 v3.0.0-beta.29
-	golang.org/x/sys v0.46.0
+	github.com/wailsapp/wails/v3 v3.0.0-beta.32
+	golang.org/x/sys v0.48.0
 )
 
 require (
