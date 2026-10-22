@@ -431,10 +431,10 @@ The first response with a 2xx status code is used.
 
 ---
 
-## Android UI Controls <Badge text="Android only" variant="note" />
+## Mobile UI Controls <Badge text="Android & iOS" variant="note" />
 
-The following headers are supported exclusively by the **Android** version of Prizrak-Box.
-They allow subscription providers to control certain UI elements and behaviour of the Android client.
+The following headers are supported by the **mobile** versions of Prizrak-Box (**Android** and **iOS**).
+They allow subscription providers to control certain UI elements and behaviour of the mobile client.
 
 All values are applied once on subscription fetch and persist in the profile until the next update.
 
@@ -538,6 +538,95 @@ pxa-rp-mp: 1
 
 </details>
 
+<details>
+<summary>**`pxa-theme`**</summary>
+
+Sets the look of the client on Android, iPhone, iPad and Apple TV for the profile: the profile card colour, the accent colour, the mode (light / dark) and the home screen background.
+
+| Property | Value |
+|----------|-------|
+| Type | `string` (key=value pairs separated by semicolons) |
+| Encoding | UTF-8 or Base64 (`base64:` prefix) |
+| Applies to | `card`: always, to the card of its own profile; `accent`, `mode`, `background`: while the profile is active |
+
+| Parameter | Values | Description |
+|-----------|--------|-------------|
+| `card` | `#RRGGBB` or `auto` | Profile card colour: in the deck on the home screen, on the collapsed card above the active one, in the opened profile, in the **Profiles** tab on iPad, on Apple TV. `auto` takes it from the profile logo |
+| `accent` | `#RRGGBB`, `auto` or `user` | Accent colour: tabs, buttons, links, home screen backgrounds. `auto` uses the card colour. `user` keeps what the user chose in **Accent Colour** |
+| `mode` | `auto`, `light`, `dark` or `user` | App appearance. `auto` follows the system, `light` is light, `dark` is dark. `user` keeps what the user chose in **Visual** |
+| `background` | `topography`, `clean`, `bigGhost`, `dotGrid`, `hem`, `signal`, `ghostPattern`, `cucumber`, `mushroomia` or `user` | Home screen background. `user` keeps what the user chose |
+
+Every parameter is optional. A parameter missing from the header comes from the user's own settings, which works the same as `user`. An explicit `user` says that the profile deliberately leaves this parameter to the user.
+
+Keys and values are case-insensitive, and spaces around `=` and `;` are ignored. Unknown parameters and invalid values are skipped, the rest is applied. A colour is written only as `#` followed by six hexadecimal digits.
+
+`card` has no `user` value: the user has no own choice of card colour, it always comes from the logo, which is what `auto` does.
+
+**Colours:**
+
+- If `card` is so light that white text on it is hard to read, the card is darkened, as it already is with light logos.
+- `accent` is applied as given, the same as a colour from **Personalisation**.
+
+**Full example:**
+
+```http
+pxa-theme: accent=#1fb5c9; card=#0f3d4a; mode=dark; background=mushroomia
+```
+
+**The same header in Base64:**
+
+```http
+pxa-theme: base64:YWNjZW50PSMxZmI1Yzk7IGNhcmQ9IzBmM2Q0YTsgbW9kZT1kYXJrOyBiYWNrZ3JvdW5kPW11c2hyb29taWE=
+```
+
+**Only the accent and card colours:**
+
+```http
+pxa-theme: accent=#8e5be8; card=#3b2a6b
+```
+
+The mode and the background stay as the user chose them.
+
+**A card colour, with the accent taken from the card:**
+
+```http
+pxa-theme: card=#c9484f; accent=auto
+```
+
+**Only a card colour, everything else explicitly left to the user:**
+
+```http
+pxa-theme: card=#5a2d14; accent=user; mode=user; background=user
+```
+
+**Appearance follows the system:**
+
+```http
+pxa-theme: accent=#8e5be8; mode=auto
+```
+
+The appearance follows Android or iOS, even if the user chose light or dark in the app.
+
+**Settings → Visual**
+
+- If the active profile has this header, a **"Profile theme"** switch appears at the top, with a caption saying what the profile sets, for example "Provider sets accent, card, mode, background". Parameters set to `user` are not listed in the caption.
+- Items set by the profile (Mode, Accent Colour, Home Background) are shown with a lock and cannot be changed.
+- **Accent Colour** shows a banner at the top, "Colour set by profile "Provider"". The list and **Personalisation** are dimmed, and the choice in them is kept.
+
+**How the user's settings come back**
+
+- There is one **"Profile theme"** switch for the whole app. Turning it off brings back the user's own settings: accent, mode, background, and card colours come from the logos again.
+- The user's settings are never overwritten. They also apply when switching to a profile without this header (or the defaults, if the user never changed them).
+- If the header disappears on the next subscription update, or no valid parameter is left in it, the profile theme is removed.
+
+**Differences from [`pxd-theme`](#desktop-ui-controls-) (desktop):**
+
+- No `image`, `transparency`, `blur` or `dim`: the mobile client has no background image or transparent panels. `background` with built-in backgrounds is used instead of `image`.
+- `card` and the `user` value are added.
+- `accent=auto` takes the card colour, not a colour from a background image.
+
+</details>
+
 ---
 
 ## Desktop UI Controls <Badge text="Desktop only" variant="note" />
@@ -637,7 +726,7 @@ When a profile has HWID active, Prizrak-Box automatically attaches the following
 | Header | Description |
 |--------|-------------|
 | `X-Hwid` | Hardware fingerprint — the unique identifier for this device |
-| `X-Device-OS` | Operating system name (e.g. `Windows`, `Android`, `macOS`) |
+| `X-Device-OS` | Operating system name (e.g. `Windows`, `Android`, `iOS`, `macOS`) |
 | `X-Ver-OS` | OS version string (e.g. `14`, `11`, `14.5`) |
 | `X-Device-Model` | Device model name (e.g. `Pixel 8`, `iPhone 14 Pro Max`) |
 

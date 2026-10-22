@@ -41,6 +41,12 @@ Prizrak-Core ships with Prizrak-Box, but it also works on its own. It is a stand
 
 The `smart` group type comes from [vernesong/mihomo](https://github.com/vernesong/mihomo). The group picks a node by weights computed from how the nodes actually perform: latency, connection success rate and traffic. Weight prediction by a LightGBM model can be enabled.
 
+Since v1.19.33 the group also learns where each node leads and which sites refuse it:
+
+- **Node exit.** The group finds out the country and network (ASN) where a node's traffic comes out. To do that it sends a request through the node to `cloudflare.com/cdn-cgi/trace`, `api.ip.sb` or `ipwho.is`, the next one if the previous does not answer.
+- **Site responses.** If a site refuses a node (blocked for its region, an error page, `403`, a connection without any answer), the group remembers it and sends this site through other nodes.
+- **No hasty verdicts.** A region or a network is marked as refused only after several independent nodes from it fail. One refusal decides nothing, and a node that answers again clears the record.
+
 Configuration details are on the [Smart Proxy Group](/for-devs/smart-proxy-group/) page.
 
 ---

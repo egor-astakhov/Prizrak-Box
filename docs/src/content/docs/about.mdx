@@ -43,6 +43,7 @@ It provides a user-friendly graphical interface for managing proxy subscriptions
 | macOS (arm64, x64) | ✅ Supported |
 | Linux (arm64, x64) | ✅ Supported |
 | Android (arm64, armv7, x86_64) | ✅ Supported |
+| iOS, iPadOS, tvOS | 🧪 Testing (TestFlight) |
 
 ## Subscription Management
 
@@ -64,6 +65,7 @@ The app is structured as:
 - **Wails v3** (Windows, macOS) — native desktop shell rendering the Vue 3 UI
 - **Electron** (Linux) — desktop shell rendering the Vue 3 UI
 - **Android** — Jetpack Compose UI
+- **iOS, iPadOS, tvOS** — SwiftUI UI with the Mihomo core built in as a Go library
 - **Go backend** (`px`) — HTTP API, subscription management, BoltDB persistence
 - **Go service** (`px-service`) — elevated system service for TUN mode (Windows, Linux, macOS)
 - **Mihomo core** — proxy routing engine (custom fork) embedded in the Go binary

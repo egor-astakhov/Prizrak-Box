@@ -44,6 +44,7 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 | Linux (arm64, x64) | ✅ Поддерживается |
 | Android (arm64, armv7, x86_64) | ✅ Поддерживается |
 | Android TV | ✅ Поддерживается |
+| iOS, iPadOS, tvOS | 🧪 Тестирование (TestFlight) |
 
 ## Управление подписками
 
@@ -65,6 +66,7 @@ Prizrak-Box поддерживает три типа профилей:
 - **Wails v3** (Windows, macOS) — нативная оболочка, отображающая Vue 3 интерфейс
 - **Electron** (Linux) — оболочка, отображающая Vue 3 интерфейс
 - **Android** — интерфейс на Jetpack Compose
+- **iOS, iPadOS, tvOS** — интерфейс на SwiftUI, ядро Mihomo встроено как Go-библиотека
 - **Go-бэкенд** (`px`) — HTTP API, управление подписками, хранилище BoltDB
 - **Go-служба** (`px-service`) — привилегированная системная служба для TUN-режима (Windows, Linux, macOS)
 - **Ядро Mihomo** — движок прокси-маршрутизации (кастомный форк), встроенный в Go-бинарник
