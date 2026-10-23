@@ -20,6 +20,8 @@
 // by the Go kvstore service (electron-store compatible file); native
 // notifications are exposed as window.pxNotify.
 
+import { flushDeferredPersist } from '@/types/persist';
+
 type AnyWindow = Window & Record<string, any>;
 
 // Lazily-loaded modules (only fetched under the Wails shell).
@@ -144,14 +146,36 @@ export function installWailsShim(): void {
     // (renderer->main vs main->renderer); a single Wails bus would loop an
     // emitted "profiles" back into the frontend's own "profiles" listener and
     // overwrite freshly-set state. px:fe:* = frontend->Go, px:be:* = Go->frontend.
+    //
+    // `off` must really unsubscribe: views (Home.vue, Profiles.vue, …) subscribe
+    // on mount and unsubscribe on unmount, so a no-op `off` left one listener
+    // per visit behind, each closure keeping the whole unmounted component
+    // tree (DOM, reactive state, fetched profile lists) reachable — memory
+    // that only grew for as long as the app ran.
+    const trayListeners = new Map<string, Map<(...a: any[]) => void, Promise<(() => void) | null>>>();
     w.pxTray = {
         on: (name: string, cb: (...a: any[]) => void) => {
-            runtime()
-                .then(({ Events }) => Events.On('px:be:' + name, (e: any) => cb(e?.data)))
-                .catch(() => { /* ignore */ });
+            const cancel = runtime()
+                .then(({ Events }): () => void => Events.On('px:be:' + name, (e: any) => cb(e?.data)))
+                .catch((): null => null);
+            let byCb = trayListeners.get(name);
+            if (!byCb) trayListeners.set(name, byCb = new Map());
+            // Re-subscribing the same callback replaces (and cancels) the old one.
+            byCb.get(cb)?.then(c => c?.());
+            byCb.set(cb, cancel);
         },
-        off: (_name: string, _cb: (...a: any[]) => void) => { /* later phase */ },
+        off: (name: string, cb: (...a: any[]) => void) => {
+            const byCb = trayListeners.get(name);
+            const cancel = byCb?.get(cb);
+            if (!byCb || !cancel) return;
+            byCb.delete(cb);
+            if (byCb.size === 0) trayListeners.delete(name);
+            cancel.then(c => c?.());
+        },
         emit: (name: string, data: any) => {
+            // The shell destroys the webview right after these, so state
+            // whose save is still pending must hit storage first.
+            if (name === 'close' || name === 'doQuit') flushDeferredPersist();
             runtime()
                 .then(({ Events }) => Events.Emit('px:fe:' + name, data))
                 .catch(() => { /* ignore */ });

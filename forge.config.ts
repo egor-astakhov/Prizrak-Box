@@ -9,20 +9,46 @@ import {AutoUnpackNativesPlugin} from '@electron-forge/plugin-auto-unpack-native
 import {VitePlugin} from '@electron-forge/plugin-vite';
 import {FusesPlugin} from '@electron-forge/plugin-fuses';
 import {FuseV1Options, FuseVersion} from '@electron/fuses';
+import {execFileSync} from 'child_process';
 
 const isWindows = process.platform === 'win32';
 const extraResource = isWindows
     ? ['src-go/px.exe', 'src-service/px-service.exe']
     : ['src-go/px', 'src-service/px-service', 'build/prizrak-box-service.policy'];
 const arch = process.env.ARCH || process.arch;
-const envProvidedIdentity = process.env.MAC_CODESIGN_IDENTITY
-    || process.env.CODESIGN_IDENTITY
-    || process.env.APPLE_IDENTITY;
+// macOS signing identity. Nothing is hard-coded: CI imports the certificate from
+// the MACOS_CERTIFICATE secret into a keychain and exports the identity it finds
+// as CODESIGN_IDENTITY (release.yml, "Configure Code Signing"). Without that
+// variable — e.g. a local build — the first "Developer ID Application" identity
+// in the user's keychains is used, if there is one.
+function findMacIdentity(): string | undefined {
+    if (process.platform !== 'darwin') {
+        return undefined;
+    }
+    try {
+        const out = execFileSync('security', ['find-identity', '-v', '-p', 'codesigning'], {encoding: 'utf8'});
+        return out.match(/"(Developer ID Application: [^"]+)"/)?.[1];
+    } catch {
+        return undefined;
+    }
+}
+
 const forceCodeSign = process.env.FORCE_CODE_SIGN === 'true';
-const macSignInputsPresent = Boolean(envProvidedIdentity || forceCodeSign);
-const macIdentity = envProvidedIdentity || 'Developer ID Application: Yaroslav Podieiapolskii (4Q268756HJ)';
+const macIdentity = process.env.MAC_CODESIGN_IDENTITY
+    || process.env.CODESIGN_IDENTITY
+    || process.env.APPLE_IDENTITY
+    || findMacIdentity();
+if (process.platform === 'darwin' && forceCodeSign && !macIdentity) {
+    // A release build must not silently come out unsigned (or be signed with
+    // whatever identity happens to be lying around).
+    throw new Error('FORCE_CODE_SIGN is set but no "Developer ID Application" signing identity was found');
+}
+const macSignInputsPresent = Boolean(macIdentity);
+// The Team ID is the part in parentheses at the end of the identity name, so it
+// follows the certificate even if the TEAM_ID secret is not set.
+const macTeamId = process.env.TEAM_ID || macIdentity?.match(/\(([A-Z0-9]{10})\)\s*$/)?.[1];
 const macNotarizeInputsPresent = macSignInputsPresent
-    && Boolean(process.env.APPLE_ID && process.env.APP_SPECIFIC_PASSWORD && process.env.TEAM_ID);
+    && Boolean(process.env.APPLE_ID && process.env.APP_SPECIFIC_PASSWORD && macTeamId);
 
 const packagerConfig: ForgeConfig['packagerConfig'] = {
     asar: true,
@@ -58,7 +84,7 @@ if (process.platform === 'darwin' && macNotarizeInputsPresent) {
         tool: 'notarytool',
         appleId: process.env.APPLE_ID,
         appleIdPassword: process.env.APP_SPECIFIC_PASSWORD,
-        teamId: process.env.TEAM_ID,
+        teamId: macTeamId!,
     };
 }
 

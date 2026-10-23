@@ -13,6 +13,9 @@ const app = express();
 let storedPort: string | undefined;
 let storedSecret: string | undefined;
 let listenAddr: string | undefined;
+// Number of /pxStore callbacks so far: lets a caller tell whether the px it just
+// started has reported in, even when an earlier px already set port/secret.
+let reportCount = 0;
 let goFlag: Function;
 
 // 解析请求参数
@@ -156,6 +159,7 @@ app.get("/pxStore", (req, res) => {
 
     storedPort = port as string;
     storedSecret = secret as string;
+    reportCount++;
 
     log.info("Retrieved port:", storedPort);
     log.info("Retrieved secret:", storedSecret);
@@ -187,4 +191,5 @@ export const storeInfo = {
     port: () => storedPort,
     secret: () => storedSecret,
     listenAddr: () => listenAddr,
+    reports: () => reportCount,
 }

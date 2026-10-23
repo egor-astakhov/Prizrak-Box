@@ -79,6 +79,10 @@ func installServiceLinux() error {
 		return fmt.Errorf("failed to resolve symlinks: %w", err)
 	}
 
+	// До регистрации юнита: иначе systemd под SELinux не сможет его запустить
+	// (см. selinux_linux.go).
+	labelServiceBinariesForSELinux(execPath)
+
 	// Создаём содержимое unit файла
 	unitContent := getSystemdUnitContent(execPath)
 
@@ -102,6 +106,16 @@ func installServiceLinux() error {
 	}
 
 	fmt.Println("Enabled service auto-start")
+
+	// Повторная установка (обновление пакета, кнопка в приложении) при уже
+	// запущенном сервисе: "systemctl start" ничего не сделает, и останется
+	// старый процесс — со старым бинарником и, под SELinux, в старом домене.
+	if exec.Command("systemctl", "is-active", "--quiet", serviceFileName).Run() == nil {
+		if err := exec.Command("systemctl", "restart", serviceFileName).Run(); err != nil {
+			return fmt.Errorf("failed to restart service: %w", err)
+		}
+		fmt.Println("Restarted running service")
+	}
 
 	return nil
 }
@@ -127,6 +141,12 @@ func uninstallServiceLinux() error {
 	}
 
 	fmt.Printf("Removed service file: %s\n", servicePath)
+
+	if execPath, err := os.Executable(); err == nil {
+		if execPath, err = filepath.EvalSymlinks(execPath); err == nil {
+			removeSELinuxLabelRules(execPath)
+		}
+	}
 
 	// Перезагружаем systemd
 	if err := exec.Command("systemctl", "daemon-reload").Run(); err != nil {

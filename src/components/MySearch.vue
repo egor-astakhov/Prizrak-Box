@@ -187,12 +187,8 @@ onMounted(async () => {
   window.addEventListener('profile-changed', handleProfileChanged as EventListener);
 });
 
-onUnmounted(() => {
-  window.removeEventListener('profile-changed', handleProfileChanged as EventListener);
-});
-
 // Listen to proxy change events from other sources (menu, tray, etc.)
-Events.On("proxyChanged", async (data: any) => {
+const handleProxyChangedEvent = async (data: any) => {
   if (data?.group) {
     selectedGroup.value = data.group;
     proxiesStore.setActive(data.group);
@@ -202,11 +198,23 @@ Events.On("proxyChanged", async (data: any) => {
     proxiesStore.setNow(data.proxy);
   }
   await loadProxies();
-});
+};
 
 // Listen to profile change events
-Events.On("profileChanged", async () => {
+const handleProfileChangedEvent = async () => {
   await handleProfileChanged();
+};
+
+// This component is re-created every time the user leaves the Proxies page
+// (v-if in App.vue), so its listeners must go away on unmount: otherwise every
+// visit leaves a copy behind that keeps the old instance alive.
+Events.On("proxyChanged", handleProxyChangedEvent);
+Events.On("profileChanged", handleProfileChangedEvent);
+
+onUnmounted(() => {
+  window.removeEventListener('profile-changed', handleProfileChanged as EventListener);
+  Events.Off("proxyChanged", handleProxyChangedEvent);
+  Events.Off("profileChanged", handleProfileChangedEvent);
 });
 
 // Watch for store changes from other components (e.g. Proxies.vue).

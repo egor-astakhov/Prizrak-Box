@@ -127,6 +127,9 @@ func main() {
 		// letting them vanish.
 		PanicHandler: shellPanicHandler,
 		ErrorHandler: shellErrorHandler,
+		// Windows: end the process right after Wails' own cleanup instead of
+		// unwinding through ExitProcess (see exit_windows.go).
+		PostShutdown: terminateAfterShutdown,
 		Assets: application.AssetOptions{
 			Handler: application.BundledAssetFileServer(distFS),
 			// Serves the theme picker's custom-background upload endpoints

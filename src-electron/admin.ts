@@ -12,6 +12,12 @@ import {
     isServiceBinaryPresent,
     waitForServiceReady
 } from "./service";
+import {storeInfo} from "./server";
+
+// How long px started by the service gets to report its port before the app
+// gives up on the service and starts px itself. Matches the Wails shell's wait
+// (CoreService.Await in src-wails/services/tun.go).
+const SERVICE_PX_REPORT_TIMEOUT_MS = 30000;
 
 // 是否在开发模式
 const isDev = !app.isPackaged;
@@ -107,9 +113,22 @@ export async function startBackend(addr: string) {
             await stopPxViaService().catch(() => {});
             await new Promise(r => setTimeout(r, 800));
         }
+        const reportsBefore = storeInfo.reports();
         const started = await startPxViaService(backendPath, addr, homeDir);
         if (started) {
             log.info('[Backend] px started via service successfully');
+            // "Started" only means the service spawned px. px can still die right
+            // away — e.g. under SELinux, when the service runs in init_t and px
+            // cannot write the user's data directory — and the window is created
+            // only after px reports in (waitForReady in main.ts), so without this
+            // the app never shows up at all. Fall back to a direct start, exactly
+            // as when the service is unreachable: the app works, TUN stays off.
+            setTimeout(() => {
+                if (storeInfo.reports() === reportsBefore) {
+                    log.warn(`[Backend] px started via service did not report within ${SERVICE_PX_REPORT_TIMEOUT_MS / 1000}s (see the PrizrakBoxService journal); starting px directly`);
+                    startNormally(backendPath, args);
+                }
+            }, SERVICE_PX_REPORT_TIMEOUT_MS);
             return;
         }
         log.warn('[Backend] Failed to start px via service, falling back to normal mode');

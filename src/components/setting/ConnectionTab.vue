@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, getCurrentInstance, onBeforeUnmount, onMounted, ref, watch} from "vue";
+import {computed, getCurrentInstance, onBeforeUnmount, onMounted, ref, shallowRef, watch} from "vue";
 import ConnectionRow from "@/components/setting/ConnectionRow.vue";
 import MihomoCoreIcon from "@/components/setting/MihomoCoreIcon.vue";
 import UiDropdown from "@/components/ui/UiDropdown.vue";
@@ -253,12 +253,15 @@ function filterData(cacheData: any): any[] {
   return cache;
 }
 
-const paginatedData = ref<any[]>([]);
+// The whole snapshot is replaced on every websocket frame (once a second) and
+// never mutated in place afterwards, so it is held shallowly: a deep ref
+// wrapped every connection object of every frame in reactive proxies.
+const paginatedData = shallowRef<any[]>([]);
 
 // Pause freezes what the list shows; the socket keeps running underneath so
 // closed connections are still recorded.
 const paused = ref(false)
-const frozen = ref<any[] | null>(null)
+const frozen = shallowRef<any[] | null>(null)
 watch(paused, (value) => {
   frozen.value = value ? [...displaySource.value] : null
 })

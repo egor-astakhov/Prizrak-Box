@@ -15,6 +15,11 @@ on:
         description: 'Mark as pre-release'
         type: boolean
         default: false
+      release_notes_b64:
+        description: 'Release notes: Markdown encoded as base64. If set, the release is created only after a successful build, already with all files and download links (nothing is published up front). Leave empty for the old flow (empty release created immediately).'
+        type: string
+        required: false
+        default: ''
       build_windows:
         description: 'Build Windows'
         type: boolean
@@ -55,8 +60,40 @@ jobs:
             echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           fi
 
+      # With release notes supplied, the release is created by the `release` job
+      # after every build has succeeded, so a broken payload must fail here, before
+      # an hour of builds, not at the very end.
+      - name: Validate release notes (workflow_dispatch with notes)
+        if: github.event_name == 'workflow_dispatch' && inputs.release_notes_b64 != ''
+        env:
+          NOTES_B64: ${{ inputs.release_notes_b64 }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! printf '%s' "$NOTES_B64" | tr -d ' \r\n\t' | base64 -d > notes.md 2>/dev/null; then
+            echo "::error::release_notes_b64 is not valid base64"
+            exit 1
+          fi
+          if [ ! -s notes.md ]; then
+            echo "::error::release_notes_b64 decodes to empty text"
+            exit 1
+          fi
+          if ! iconv -f UTF-8 -t UTF-8 notes.md > /dev/null 2>&1; then
+            echo "::error::release_notes_b64 does not decode to UTF-8 text"
+            exit 1
+          fi
+          {
+            echo '### Release notes (decoded)'
+            echo
+            cat notes.md
+          } >> "$GITHUB_STEP_SUMMARY"
+          if gh release view "${{ inputs.version }}" --repo "${{ github.repository }}" --json isDraft --jq '.isDraft' 2>/dev/null | grep -qx false; then
+            echo "::error::Release ${{ inputs.version }} is already published; run without release_notes_b64 to rebuild it, or pick a new version"
+            exit 1
+          fi
+        shell: bash
+
       - name: Create tag and GitHub release (workflow_dispatch only)
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.release_notes_b64 == ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -805,12 +842,16 @@ jobs:
   # ── AUR ──
   publish_aur:
     name: Publish to AUR
-    needs: [setup, build_linux]
+    # After `release`: the PKGBUILD points at the release's assets, which only
+    # exist once that job has uploaded them (and, for a run with release notes,
+    # once the release itself has been published).
+    needs: [setup, build_linux, release]
     # Run only if Linux was built (or not skipped) and succeeded
     if: |
       always() && !cancelled() &&
       needs.setup.result == 'success' &&
-      needs.build_linux.result == 'success'
+      needs.build_linux.result == 'success' &&
+      needs.release.result == 'success'
     runs-on: ubuntu-latest
     environment: aur
     # AUR is a secondary distribution channel served by a third party that is
@@ -1351,10 +1392,11 @@ jobs:
 
   # ── Release: upload artifacts and update release body ──
   release:
-    needs: [setup, build_android, build_windows, build_linux, build_macos, build_windows_wails, build_macos_wails, build_linux_wails, publish_aur]
+    needs: [setup, build_android, build_windows, build_linux, build_macos, build_windows_wails, build_macos_wails, build_linux_wails]
     # Run only if no build job failed; skipped jobs are tolerated (user may disable some platforms).
-    # publish_aur is deliberately NOT checked: the AUR is a third-party service
-    # whose outages must not block publishing the release artifacts.
+    # publish_aur runs after this job (it needs the uploaded assets) and is
+    # non-fatal: the AUR is a third-party service whose outages must not block
+    # publishing the release artifacts.
     if: |
       always() && !cancelled() &&
       needs.setup.result == 'success' &&
@@ -1379,6 +1421,8 @@ jobs:
         uses: actions/github-script@v7
         env:
           VERSION: ${{ needs.setup.outputs.version }}
+          NOTES_B64: ${{ github.event_name == 'workflow_dispatch' && inputs.release_notes_b64 || '' }}
+          PRERELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -1389,17 +1433,52 @@ jobs:
             const path = require('path');
             const dedent = s => s.replace(/\n {12}/g, '\n').replace(/^ {12}/m, '');
 
+            // Run started from workflow_dispatch with release notes: nothing exists
+            // yet. The release is built up as a draft (invisible to users), gets its
+            // assets and body, and is published only at the very end, so nobody ever
+            // sees it without files. The tag is created on publish, at the commit
+            // that was built. A draft left by an interrupted run is reused.
+            const notesB64 = (process.env.NOTES_B64 || '').replace(/\s+/g, '');
+            const deferred = notesB64 !== '';
+            const notes = deferred ? Buffer.from(notesB64, 'base64').toString('utf8').trim() : '';
+
             let release;
-            try {
-              const { data } = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
-              release = data;
-              core.info(`Found release ID ${release.id} for tag ${tag}.`);
-            } catch (error) {
-              if (error.status === 404) {
-                core.setFailed(`Release with tag '${tag}' not found.`);
+            if (deferred) {
+              // getReleaseByTag does not see drafts; list them instead.
+              const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
+              release = releases.find(r => r.tag_name === tag);
+              if (release && !release.draft) {
+                core.setFailed(`Release '${tag}' is already published; refusing to replace it.`);
                 return;
               }
-              throw error;
+              if (!release) {
+                const { data } = await github.rest.repos.createRelease({
+                  owner, repo,
+                  tag_name: tag,
+                  target_commitish: context.sha,
+                  name: tag,
+                  body: notes,
+                  draft: true,
+                  prerelease: process.env.PRERELEASE === 'true',
+                });
+                release = data;
+                core.info(`Created draft release ID ${release.id} for tag ${tag}.`);
+              } else {
+                core.info(`Reusing draft release ID ${release.id} for tag ${tag}.`);
+              }
+              release.body = notes;
+            } else {
+              try {
+                const { data } = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+                release = data;
+                core.info(`Found release ID ${release.id} for tag ${tag}.`);
+              } catch (error) {
+                if (error.status === 404) {
+                  core.setFailed(`Release with tag '${tag}' not found.`);
+                  return;
+                }
+                throw error;
+              }
             }
 
             const downloadLinks = dedent(`<div align=center>
@@ -1483,7 +1562,14 @@ jobs:
             </table>
             </div>`);
 
-            const newBody = (release.body ? release.body.replace(/\n*<div align=center>[\s\S]*<\/div>\s*$/, '') + '\n\n' : '') + downloadLinks;
+            // The download table is appended to the notes in both flows. A body that
+            // already exists may carry the table from an earlier run, which is cut
+            // off first; notes passed as release_notes_b64 are always fresh, so they
+            // are kept verbatim (their own <div align=center> blocks included).
+            const baseBody = deferred
+              ? notes
+              : (release.body ? release.body.replace(/\n*<div align=center>[\s\S]*<\/div>\s*$/, '') : '');
+            const newBody = (baseBody ? baseBody + '\n\n' : '') + downloadLinks;
 
             await github.rest.repos.updateRelease({
               owner,
@@ -1497,6 +1583,10 @@ jobs:
             const artifactsDir = 'artifacts';
 
             if (!fs.existsSync(artifactsDir)) {
+              if (deferred) {
+                core.setFailed('No artifacts were built; leaving the release as an unpublished draft.');
+                return;
+              }
               core.info('No artifacts directory found, skipping upload.');
               return;
             }
@@ -1535,3 +1625,12 @@ jobs:
               }
             }
             core.info('All assets uploaded successfully.');
+
+            if (deferred) {
+              await github.rest.repos.updateRelease({
+                owner, repo,
+                release_id: release.id,
+                draft: false,
+              });
+              core.info(`Published release ${tag}.`);
+            }

@@ -7,6 +7,7 @@ import IconFileText from "~icons/tabler/file-text";
 import IconSearchOff from "~icons/tabler/search-off";
 
 interface LogEntry {
+  id?: number;
   time: string;
   type: string;
   payload: string;
@@ -172,7 +173,7 @@ async function clearAll() {
       <UiEmpty :icon="IconSearchOff" :title="t('empty.search.title')" :text="t('empty.search.text')"/>
     </div>
     <div v-else ref="listEl" class="logs-panel logs-list mono" role="log" aria-live="off">
-      <div v-for="(item, i) in filtered" :key="i" class="log-line">
+      <div v-for="(item, i) in filtered" :key="item.id ?? 'i' + i" class="log-line">
         <span class="log-time tabular">{{ item.time }}</span>
         <span class="log-type" :class="'is-' + tone(item.type)">{{ item.type }}</span>
         <span class="log-payload"><template v-for="(part, j) in segments(item.payload)" :key="j"><mark v-if="part.hit" class="log-hit">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></span>

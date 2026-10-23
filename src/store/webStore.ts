@@ -1,9 +1,14 @@
 import {defineStore} from 'pinia';
+import {deferredPersist} from '@/types/persist';
 
 export interface CustomDashboard {
     name: string;
     url: string;
 }
+
+// Session-unique log entry ids; entries restored from storage may carry ids
+// from an earlier session, so start past any realistic previous value.
+let logSeq = Date.now();
 
 export const useWebStore = defineStore('web', {
     state: () => ({
@@ -34,7 +39,9 @@ export const useWebStore = defineStore('web', {
         },
         addLog(log: any) {
             // Oldest first; keep the most recent 1000 entries (also persisted).
-            this.logs.push(log);
+            // `id` gives LogTab a stable row key: keyed by index, every row of
+            // a full buffer shifted (and was re-rendered) on each new line.
+            this.logs.push({...log, id: ++logSeq});
             if (this.logs.length > 1000) {
                 this.logs.splice(0, this.logs.length - 1000);
             }
@@ -60,5 +67,7 @@ export const useWebStore = defineStore('web', {
             this.customDashboards.splice(index, 1);
         },
     },
-    persist: true,
+    // Same localStorage key and format as `persist: true`, but batched: addLog
+    // mutates this store for every log line (see deferredPersist).
+    persist: deferredPersist(),
 });

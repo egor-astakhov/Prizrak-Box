@@ -28,7 +28,10 @@ const props = defineProps<{
 }>();
 
 const chartContainer = ref<HTMLElement>();
-const chart = ref<ECharts>();
+// Deliberately NOT a ref: Vue would deep-proxy the ECharts instance (its whole
+// zrender scene graph), so every setOption ran through reactive proxies —
+// lots of CPU and garbage on each websocket frame.
+let chart: ECharts | null = null;
 const isPaused = ref(false);
 
 // Sankey diagram data structure
@@ -288,84 +291,113 @@ const chartOptions = computed(() => {
   };
 });
 
+// The Sankey is rebuilt from scratch (setOption with notMerge), which with the
+// SVG renderer replaces every path in the DOM. Mihomo pushes a /connections
+// frame every second, but the graph only changes when the set of
+// process → rule → proxy flows changes, so a frame that yields the same graph
+// is skipped, rebuilds are rate-limited, and nothing is drawn while the window
+// is hidden (minimised / in the tray).
+const MIN_UPDATE_INTERVAL = 3000;
+let renderedSignature = '';
+let lastUpdate = 0;
+let updateTimer: ReturnType<typeof setTimeout> | null = null;
+
+const graphSignature = () => {
+  const { nodes, links } = sankeyData.value;
+  return JSON.stringify([nodes.map(n => n.name), links.map(l => [l.source, l.target, l.value])]);
+};
+
+const disposeChart = () => {
+  if (updateTimer) {
+    clearTimeout(updateTimer);
+    updateTimer = null;
+  }
+  chart?.dispose();
+  chart = null;
+  renderedSignature = '';
+};
+
 // Initialize chart
 const initChart = () => {
+  disposeChart();
   if (!chartContainer.value) return;
 
-  if (chart.value) {
-    chart.value.dispose();
-  }
-
   // Use SVG renderer for better emoji support
-  chart.value = echarts.init(chartContainer.value, null, {
+  chart = echarts.init(chartContainer.value, null, {
     renderer: 'svg',
   });
-  updateChart();
+  updateChart(true);
 };
 
 // Update chart with new data
-const updateChart = () => {
-  if (!chart.value || isPaused.value) return;
+const updateChart = (force = false) => {
+  if (!chart || isPaused.value || document.hidden) return;
 
-  chart.value.setOption(chartOptions.value, true);
+  const signature = graphSignature();
+  if (!force && signature === renderedSignature) return;
+
+  const wait = lastUpdate + MIN_UPDATE_INTERVAL - Date.now();
+  if (!force && wait > 0) {
+    // Trailing update so the latest graph is shown once the interval is over.
+    updateTimer ??= setTimeout(() => {
+      updateTimer = null;
+      updateChart();
+    }, wait);
+    return;
+  }
+
+  lastUpdate = Date.now();
+  renderedSignature = signature;
+  chart.setOption(chartOptions.value, true);
 };
 
 // Handle window resize
 const handleResize = () => {
-  if (chart.value) {
-    chart.value.resize();
-  }
+  chart?.resize();
+};
+
+// Catch up on what changed while the window was hidden.
+const handleVisibility = () => {
+  if (!document.hidden) updateChart(true);
 };
 
 // Toggle pause/resume
 const togglePause = () => {
   isPaused.value = !isPaused.value;
   if (!isPaused.value) {
-    updateChart();
+    updateChart(true);
   }
 };
 
-// Watch for connection changes
-watch(
-  () => props.connections,
-  () => {
-    if (!isPaused.value) {
-      nextTick(() => {
-        updateChart();
-      });
-    }
-  },
-  { deep: true }
-);
+// The parent replaces the array on every websocket frame, so watching the
+// reference is enough — a deep watcher walked every connection object of
+// every frame.
+watch(() => props.connections, () => updateChart());
 
-watch(
-  () => sankeyData.value.nodes.length,
-  (nodeCount) => {
-    if (nodeCount > 0) {
-      nextTick(() => {
-        if (!chart.value) {
-          initChart();
-        } else {
-          updateChart();
-        }
-      });
-    }
+// The container is v-if'd on having nodes: it is destroyed when the list goes
+// empty and a NEW element is created when connections come back, so the chart
+// must follow the element rather than stay bound to the detached old one.
+watch(chartContainer, (el) => {
+  if (el) {
+    nextTick(initChart);
+  } else {
+    disposeChart();
   }
-);
+});
 
 // Lifecycle hooks
 onMounted(() => {
   nextTick(() => {
-    initChart();
+    if (chartContainer.value && !chart) initChart();
   });
   window.addEventListener('resize', handleResize);
+  document.addEventListener('visibilitychange', handleVisibility);
 });
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize);
-  if (chart.value) {
-    chart.value.dispose();
-  }
+  document.removeEventListener('visibilitychange', handleVisibility);
+  disposeChart();
 });
 </script>
 

@@ -555,6 +555,7 @@ async function applySystemProxyMode(enable: boolean, notify: boolean) {
 }
 
 .mode-dot {
+  position: relative;
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -565,7 +566,37 @@ async function applySystemProxyMode(enable: boolean, notify: boolean) {
 
 .mode-dot.is-on {
   opacity: 1;
-  animation: px-mode-pulse 1.8s ease-out infinite;
+}
+
+/* The dot pulses a few times when the mode turns on, then stays lit. An
+   endless pulse (box-shadow, as before) kept the whole window re-rendering at
+   the display refresh rate, backdrop blurs included, for as long as the system
+   proxy or TUN was on — i.e. practically all the time the window was open:
+   measured ~9% of a core in the renderer plus ~19% in the GPU process, against
+   ~1% with no animation running. The ring is a separate layer animated with
+   transform/opacity only, so even while it runs the compositor drives it
+   without repainting. */
+.mode-dot.is-on::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--on-accent) 50%, transparent);
+  opacity: 0;
+  animation: px-mode-ring 1.8s ease-out 3;
+  pointer-events: none;
+}
+
+@keyframes px-mode-ring {
+  0% { transform: scale(1); opacity: 1; }
+  70% { transform: scale(2.5); opacity: 0; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mode-dot.is-on::after {
+    animation: none;
+  }
 }
 
 .service-dialog__message {
