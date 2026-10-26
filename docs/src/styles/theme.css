@@ -147,19 +147,29 @@ body {
 
 .sl-markdown-content table {
     /* Starlight makes tables blocks so they scroll; hug the columns so the
-       rounded border follows them. */
+       rounded border follows them. overflow must stay auto: hidden clipped
+       the columns that do not fit a phone screen instead of scrolling them
+       (a scrolling block still clips to the rounded corners). */
     width: fit-content;
     max-width: 100%;
     border-collapse: separate;
     border-spacing: 0;
     border: 1px solid var(--border);
     border-radius: 12px;
-    overflow: hidden;
+    overflow: auto;
 }
 
 .sl-markdown-content :is(th, td):not(:where(.not-content *)) {
     border-bottom: 1px solid var(--border);
     padding: .55rem .9rem;
+}
+
+/* On a phone the auto layout squeezes every column to its narrowest word and
+   rows grow very tall; a floor keeps cells readable and the table scrolls. */
+@media (max-width: 50rem) {
+    .sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+        min-width: 9rem;
+    }
 }
 
 .sl-markdown-content tr:last-child td:not(:where(.not-content *)) {
