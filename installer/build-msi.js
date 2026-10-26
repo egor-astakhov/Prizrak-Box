@@ -33,6 +33,41 @@ const COMPONENT_GUIDS = IS_WAILS
       StartMenuShortcutGuid: '34567890-1234-1234-1234-123456789abc',
     };
 
+// Clears the installing user's system proxy when it is left pointing at the
+// px that the custom actions above just force-killed (uninstall, upgrade):
+// neither the shell nor px gets to undo it then, and the user is left with a
+// proxy on a dead port — no web access until the app is started again, or
+// ever, after an uninstall. Only a proxy that can be ours is touched: plain
+// "host:port" on loopback or the app's bindAddress, with nothing listening
+// on it once our processes are gone (px may have moved off the configured
+// port, so the port alone cannot tell). Same writes as px's own
+// DisableProxy (src-go/pkg/sys/proxy/proxy_windows.go) plus the WinINet
+// refresh. Passed to powershell -EncodedCommand: Base64 has none of the
+// [ ] { } characters Windows Installer would format.
+const RELEASE_USER_PROXY_PS = String.raw`
+$ErrorActionPreference = 'SilentlyContinue'
+$k = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
+$s = Get-ItemProperty $k
+if ($s.ProxyEnable -ne 1 -or $s.ProxyServer -notmatch '^\[?([^\]=;]+?)\]?:(\d+)$') { exit }
+$h = $Matches[1]; $p = [int]$Matches[2]
+$hosts = @('127.0.0.1', 'localhost', '::1')
+$f = Join-Path $env:APPDATA 'prizrak-box\home.path'
+$dir = if (Test-Path $f) { (Get-Content $f -Raw).Trim() } else { '' }
+if (-not $dir) { $dir = Join-Path $env:USERPROFILE 'Prizrak-Box-V3' }
+$c = Join-Path $dir 'px-electron.db\config.json'
+if (Test-Path $c) { $b = ((Get-Content $c -Raw | ConvertFrom-Json).setting | ConvertFrom-Json).bindAddress; if ($b) { $hosts += $b } }
+if ($hosts -notcontains $h) { exit }
+$alive = $false
+try { $t = New-Object Net.Sockets.TcpClient; $alive = $t.ConnectAsync($h, $p).Wait(1500) -and $t.Connected; $t.Close() } catch {}
+if ($alive) { exit }
+Set-ItemProperty $k ProxyEnable 0 -Type DWord
+Set-ItemProperty $k ProxyServer ''
+Add-Type -Namespace PB -Name WinInet -MemberDefinition '[DllImport("wininet.dll")] public static extern bool InternetSetOption(IntPtr h, int o, IntPtr b, int l);'
+[void][PB.WinInet]::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0)
+[void][PB.WinInet]::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0)
+`;
+const RELEASE_USER_PROXY_CMD = Buffer.from(RELEASE_USER_PROXY_PS.trim(), 'utf16le').toString('base64');
+
 const PATHS = {
   root: path.resolve(__dirname, '..'),
   installer: path.resolve(__dirname, 'wix'),
@@ -79,6 +114,7 @@ async function buildMSI() {
     // Electron UpgradeCode to supersede, consumed by the wails-only
     // <Upgrade>/cleanup logic in Product.wxs (harmless/unused for electron).
     ElectronUpgradeCode: ELECTRON_UPGRADE_CODE,
+    ReleaseUserProxyCmd: RELEASE_USER_PROXY_CMD,
     ...COMPONENT_GUIDS,
   };
 

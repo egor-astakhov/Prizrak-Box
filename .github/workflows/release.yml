@@ -36,6 +36,10 @@ on:
         description: 'Build Android'
         type: boolean
         default: true
+      build_rust:
+        description: 'Build Rust + Slint TEST (Windows/macOS/Linux, follows the per-OS switches)'
+        type: boolean
+        default: true
 
 jobs:
   # ── Setup: determine version, create tag + release on workflow_dispatch ──
@@ -541,7 +545,7 @@ jobs:
 
           deb_source="$(pick_package deb)"
           if [ -n "$deb_source" ]; then
-            mv "$deb_source" "linux-${arch}.deb"
+            mv "$deb_source" "linux-${arch}-electron.deb"
           else
             echo "No .deb package found under out/make"
             find out -maxdepth 4 -type d
@@ -550,17 +554,17 @@ jobs:
 
           rpm_source="$(pick_package rpm)"
           if [ -n "$rpm_source" ]; then
-            mv "$rpm_source" "linux-${arch}.rpm"
+            mv "$rpm_source" "linux-${arch}-electron.rpm"
           else
             echo "No .rpm package found under out/make"
             find out -maxdepth 4 -type d
             exit 1
           fi
 
-          if [ -f "linux-${arch}.rpm" ]; then
+          if [ -f "linux-${arch}-electron.rpm" ]; then
             aur_root=$(mktemp -d)
-            bsdtar -xf "linux-${arch}.rpm" -C "$aur_root"
-            tar --zstd -cf "linux-${arch}-aur.tar.zst" -C "$aur_root" usr
+            bsdtar -xf "linux-${arch}-electron.rpm" -C "$aur_root"
+            tar --zstd -cf "linux-${arch}-aur-electron.tar.zst" -C "$aur_root" usr
             rm -rf "$aur_root"
           fi
 
@@ -569,7 +573,7 @@ jobs:
           set -e
           arch="${{ matrix.arch }}"
           missing=0
-          for file in "linux-${arch}.deb" "linux-${arch}.rpm" "linux-${arch}-aur.tar.zst"; do
+          for file in "linux-${arch}-electron.deb" "linux-${arch}-electron.rpm" "linux-${arch}-aur-electron.tar.zst"; do
             if [ ! -f "$file" ]; then
               echo "Missing Linux artifact: $file" >&2
               missing=1
@@ -591,9 +595,9 @@ jobs:
         with:
           name: linux-${{ matrix.arch }}
           path: |
-            linux-${{ matrix.arch }}.deb
-            linux-${{ matrix.arch }}.rpm
-            linux-${{ matrix.arch }}-aur.tar.zst
+            linux-${{ matrix.arch }}-electron.deb
+            linux-${{ matrix.arch }}-electron.rpm
+            linux-${{ matrix.arch }}-aur-electron.tar.zst
 
       - name: Cancel workflow on failure
         if: ${{ failure() }}
@@ -872,10 +876,10 @@ jobs:
       - name: Calculate Checksums (AUR archives)
         id: checksums
         run: |
-          amd64_tar="artifacts/linux-amd64/linux-amd64-aur.tar.zst"
-          arm64_tar="artifacts/linux-arm64/linux-arm64-aur.tar.zst"
+          amd64_tar="artifacts/linux-amd64/linux-amd64-aur-electron.tar.zst"
+          arm64_tar="artifacts/linux-arm64/linux-arm64-aur-electron.tar.zst"
           if [ ! -f "$amd64_tar" ] || [ ! -f "$arm64_tar" ]; then
-            echo "Missing linux-*-aur.tar.zst artifacts"; exit 1
+            echo "Missing linux-*-aur-electron.tar.zst artifacts"; exit 1
           fi
           amd64_sum=$(sha256sum "$amd64_tar" | awk '{ print $1 }')
           arm64_sum=$(sha256sum "$arm64_tar" | awk '{ print $1 }')
@@ -954,8 +958,8 @@ jobs:
           depends=("electron\${_electronversion}")
           makedepends=('asar')
           source=("prizrak-box.sh")
-          source_aarch64=("\${_pkgname}-\${pkgver}-aarch64.tar.zst::\${url}/releases/download/${TAG}/linux-arm64-aur.tar.zst")
-          source_x86_64=("\${_pkgname}-\${pkgver}-x86_64.tar.zst::\${url}/releases/download/${TAG}/linux-amd64-aur.tar.zst")
+          source_aarch64=("\${_pkgname}-\${pkgver}-aarch64.tar.zst::\${url}/releases/download/${TAG}/linux-arm64-aur-electron.tar.zst")
+          source_x86_64=("\${_pkgname}-\${pkgver}-x86_64.tar.zst::\${url}/releases/download/${TAG}/linux-amd64-aur-electron.tar.zst")
           sha256sums=('${SH_SUM}')
           sha256sums_aarch64=('${{ steps.checksums.outputs.arm64_sha256 }}')
           sha256sums_x86_64=('${{ steps.checksums.outputs.amd64_sha256 }}')
@@ -1012,9 +1016,9 @@ jobs:
             conflicts = ${PKGNAME_BASE}
             source = prizrak-box.sh
             sha256sums = ${SH_SUM}
-            source_aarch64 = Prizrak-Box-${PKGVER}-aarch64.tar.zst::${URL}/releases/download/${TAG}/linux-arm64-aur.tar.zst
+            source_aarch64 = Prizrak-Box-${PKGVER}-aarch64.tar.zst::${URL}/releases/download/${TAG}/linux-arm64-aur-electron.tar.zst
             sha256sums_aarch64 = ${{ steps.checksums.outputs.arm64_sha256 }}
-            source_x86_64 = Prizrak-Box-${PKGVER}-x86_64.tar.zst::${URL}/releases/download/${TAG}/linux-amd64-aur.tar.zst
+            source_x86_64 = Prizrak-Box-${PKGVER}-x86_64.tar.zst::${URL}/releases/download/${TAG}/linux-amd64-aur-electron.tar.zst
             sha256sums_x86_64 = ${{ steps.checksums.outputs.amd64_sha256 }}
 
           pkgname = ${PKGNAME}
@@ -1176,18 +1180,18 @@ jobs:
       - name: Package .zip + .dmg
         run: |
           set -euo pipefail
-          zip -qr "macos-${{ matrix.arch }}.zip" "Prizrak-Box.app"
-          node src-wails/build/darwin/create-macos-dmg.mjs ${{ matrix.arch }} macos-${{ matrix.arch }}.dmg
+          zip -qr "macos-${{ matrix.arch }}-wails.zip" "Prizrak-Box.app"
+          node src-wails/build/darwin/create-macos-dmg.mjs ${{ matrix.arch }} macos-${{ matrix.arch }}-wails.dmg
           if [ -n "${MACOS_CERTIFICATE:-}" ]; then
             IDENTITY=$(security find-identity -v -p codesigning "$HOME/Library/Keychains/ci-signing.keychain-db" | head -n 1 | sed -E 's/^.*"(.+)"$/\1/')
-            codesign --force --timestamp --sign "$IDENTITY" "macos-${{ matrix.arch }}.dmg" || true
+            codesign --force --timestamp --sign "$IDENTITY" "macos-${{ matrix.arch }}-wails.dmg" || true
           fi
       - uses: actions/upload-artifact@v4
         with:
           name: wails-macos-${{ matrix.arch }}
           path: |
-            macos-${{ matrix.arch }}.zip
-            macos-${{ matrix.arch }}.dmg
+            macos-${{ matrix.arch }}-wails.zip
+            macos-${{ matrix.arch }}-wails.dmg
       - name: Cancel workflow on failure
         if: ${{ failure() }}
         env:
@@ -1279,16 +1283,16 @@ jobs:
         run: |
           $env:PATH = "C:\wix;$env:PATH"
           node installer/build-msi.js
-          Copy-Item "out/msi/${{ matrix.msiarch }}/windows-${{ matrix.msiarch }}.msi" "windows-${{ matrix.arch }}.msi"
+          Copy-Item "out/msi/${{ matrix.msiarch }}/windows-${{ matrix.msiarch }}.msi" "windows-${{ matrix.arch }}-wails.msi"
       - name: Stage portable zip
         shell: pwsh
-        run: Compress-Archive -Path "out/Prizrak-Box-win32-${{ matrix.msiarch }}/*" -DestinationPath "windows-${{ matrix.arch }}.zip" -Force
+        run: Compress-Archive -Path "out/Prizrak-Box-win32-${{ matrix.msiarch }}/*" -DestinationPath "windows-${{ matrix.arch }}-wails.zip" -Force
       - uses: actions/upload-artifact@v4
         with:
           name: wails-windows-${{ matrix.arch }}
           path: |
-            windows-${{ matrix.arch }}.msi
-            windows-${{ matrix.arch }}.zip
+            windows-${{ matrix.arch }}-wails.msi
+            windows-${{ matrix.arch }}-wails.zip
       - name: Cancel workflow on failure
         if: ${{ failure() }}
         env:
@@ -1390,9 +1394,297 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
 
+  # ── Rust + Slint (TEST) macOS — same .app/.dmg packaging as Wails; macos-<arch>-rs.{zip,dmg} ──
+  build_macos_rs:
+    needs: [setup]
+    if: (github.event_name == 'release' || inputs.build_macos == true) && (github.event_name == 'release' || inputs.build_rust == true)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            target: x86_64-apple-darwin
+          - arch: arm64
+            target: aarch64-apple-darwin
+    runs-on: macos-latest
+    env:
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
+      TEAM_ID: ${{ secrets.TEAM_ID }}
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with: { node-version: '22' }
+      - uses: actions/setup-go@v6
+        with: { go-version: '1.26', check-latest: true }
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: '${{ matrix.target }}' }
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: 'src-rs -> target', key: '${{ matrix.target }}' }
+      - name: Set Version
+        run: echo "VERSION=${{ needs.setup.outputs.version }}" >> $GITHUB_ENV
+      - name: Sync VERSION to package.json
+        run: node build/sync-version.js
+      - name: Refresh geo/model data
+        run: |
+          curl -fsSL --retry 3 --retry-delay 5 -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -o src-go/internal/em/Model.bin        https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin
+          curl -fsSL --retry 3 --retry-delay 5 -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -o src-go/internal/em/geoip.metadb      https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb
+          curl -fsSL --retry 3 --retry-delay 5 -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -o src-go/internal/em/GeoSite.dat        https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat
+          curl -fsSL --retry 3 --retry-delay 5 -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -o src-go/internal/em/BundleMRS.7z        https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/BundleMRS.7z
+          curl -fsSL --retry 3 --retry-delay 5 -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -o src-go/internal/em/GeoLite2-ASN.mmdb  https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/GeoLite2-ASN.mmdb
+      - name: Build px + px-service
+        env: { GOARCH: '${{ matrix.arch }}' }
+        run: |
+          (cd src-go && CGO_ENABLED=0 go build -tags=with_gvisor -trimpath -ldflags="-s -w -X github.com/legiz-ru/prizrak-box/api.Version=${{ env.VERSION }}" -o px .)
+          (cd src-service && CGO_ENABLED=0 go build -ldflags="-s -w" -o px-service .)
+      - name: Build Rust + Slint app
+        run: |
+          cd src-rs
+          cargo build --release --locked --target ${{ matrix.target }}
+      - name: Regenerate icons (gen-icons.mjs)
+        run: |
+          npm install --no-audit --no-fund
+          node src-wails/build/gen-icons.mjs
+      - name: Assemble .app
+        run: src-rs/packaging/macos/build-app.sh "src-rs/target/${{ matrix.target }}/release/prizrak-box" "$VERSION"
+      - name: Sign (if certificate secrets are present)
+        run: |
+          set -euo pipefail
+          if [ -z "${MACOS_CERTIFICATE:-}" ]; then
+            echo "No MACOS_CERTIFICATE secret — producing an UNSIGNED (ad-hoc) build."
+            exit 0
+          fi
+          KEYCHAIN="ci-signing.keychain-db"
+          KEYCHAIN_PATH="$HOME/Library/Keychains/$KEYCHAIN"
+          CERT_PATH="$(mktemp /tmp/cert-XXXXXXXX.p12)"
+          security delete-keychain "$KEYCHAIN" >/dev/null 2>&1 || true
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$CERT_PATH" 2>/dev/null || echo "$MACOS_CERTIFICATE" | base64 -d > "$CERT_PATH"
+          security create-keychain -p "$MACOS_CERT_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings "$KEYCHAIN"
+          security unlock-keychain -p "$MACOS_CERT_PASSWORD" "$KEYCHAIN"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$MACOS_CERT_PASSWORD" -A
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$MACOS_CERT_PASSWORD" "$KEYCHAIN_PATH"
+          rm -f "$CERT_PATH"
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | head -n 1 | sed -E 's/^.*"(.+)"$/\1/')
+          APP="Prizrak-Box.app"
+          ENT="$RUNNER_TEMP/entitlements.mac.plist"
+          tr -d '\r' < build/entitlements.mac.plist > "$ENT"
+          codesign --force --options runtime --timestamp \
+            --entitlements "$ENT" --sign "$IDENTITY" "$APP/Contents/MacOS/px" "$APP/Contents/MacOS/px-service"
+          codesign --force --deep --options runtime --timestamp \
+            --entitlements "$ENT" --sign "$IDENTITY" "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+      - name: Notarize (if Apple ID secrets are present)
+        run: |
+          set -euo pipefail
+          if [ -z "${MACOS_CERTIFICATE:-}" ] || [ -z "${APPLE_ID:-}" ] || [ -z "${APP_SPECIFIC_PASSWORD:-}" ] || [ -z "${TEAM_ID:-}" ]; then
+            echo "Notarization secrets not all present — skipping notarization."
+            exit 0
+          fi
+          ditto -c -k --keepParent "Prizrak-Box.app" "notarize.zip"
+          xcrun notarytool submit "notarize.zip" --apple-id "$APPLE_ID" --password "$APP_SPECIFIC_PASSWORD" --team-id "$TEAM_ID" --wait
+          xcrun stapler staple "Prizrak-Box.app"
+      - name: Package .zip + .dmg (same DMG builder as the Wails job)
+        run: |
+          set -euo pipefail
+          zip -qr "macos-${{ matrix.arch }}.zip" "Prizrak-Box.app"
+          if [ -z "${MACOS_CERTIFICATE:-}" ]; then export PB_UNSIGNED=1; fi
+          node src-wails/build/darwin/create-macos-dmg.mjs ${{ matrix.arch }} macos-${{ matrix.arch }}.dmg
+          if [ -n "${MACOS_CERTIFICATE:-}" ]; then
+            IDENTITY=$(security find-identity -v -p codesigning "$HOME/Library/Keychains/ci-signing.keychain-db" | head -n 1 | sed -E 's/^.*"(.+)"$/\1/')
+            codesign --force --timestamp --sign "$IDENTITY" "macos-${{ matrix.arch }}.dmg" || true
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rs-macos-${{ matrix.arch }}
+          path: |
+            macos-${{ matrix.arch }}.zip
+            macos-${{ matrix.arch }}.dmg
+      - name: Cancel workflow on failure
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
+
+  # ── Rust + Slint (TEST) Windows — same WiX MSI (Wails product chain) + portable zip ──
+  build_windows_rs:
+    needs: [setup]
+    if: (github.event_name == 'release' || inputs.build_windows == true) && (github.event_name == 'release' || inputs.build_rust == true)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            msiarch: x64
+            target: x86_64-pc-windows-msvc
+          - arch: arm64
+            msiarch: arm64
+            target: aarch64-pc-windows-msvc
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with: { node-version: '22' }
+      - uses: actions/setup-go@v6
+        with: { go-version: '1.26', check-latest: true }
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: '${{ matrix.target }}' }
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: 'src-rs -> target', key: '${{ matrix.target }}' }
+      - name: Set Version
+        shell: bash
+        run: echo "VERSION=${{ needs.setup.outputs.version }}" >> $GITHUB_ENV
+      - name: Sync VERSION to package.json
+        run: node build/sync-version.js
+      - name: Refresh geo/model data
+        shell: pwsh
+        run: |
+          function Fetch($uri, $out) {
+            $headers = @{ Authorization = "token ${{ secrets.GITHUB_TOKEN }}" }
+            for ($i = 1; $i -le 4; $i++) {
+              try { Invoke-WebRequest -Uri $uri -Headers $headers -OutFile $out; return }
+              catch { if ($i -eq 4) { throw }; Write-Host "Attempt $i failed, retrying in 5s..."; Start-Sleep 5 }
+            }
+          }
+          Fetch "https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin" "src-go/internal/em/Model.bin"
+          Fetch "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb" "src-go/internal/em/geoip.metadb"
+          Fetch "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat" "src-go/internal/em/GeoSite.dat"
+          Fetch "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/BundleMRS.7z" "src-go/internal/em/BundleMRS.7z"
+          Fetch "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/GeoLite2-ASN.mmdb" "src-go/internal/em/GeoLite2-ASN.mmdb"
+      - name: Build px + px-service
+        shell: pwsh
+        env: { GOARCH: '${{ matrix.arch }}' }
+        run: |
+          cd src-go;       $env:CGO_ENABLED='0'; go build -tags=with_gvisor -trimpath -ldflags="-s -w -X github.com/legiz-ru/prizrak-box/api.Version=$env:VERSION" -o px.exe .; cd ..
+          cd src-service;  $env:CGO_ENABLED='0'; go build -ldflags="-s -w" -o px-service.exe .;   cd ..
+      - name: Build Rust + Slint app (Prizrak-Box.exe with icon + version)
+        shell: pwsh
+        run: |
+          cd src-rs
+          cargo build --release --locked --target ${{ matrix.target }}
+      - name: Stage app (Electron/Wails MSI layout)
+        shell: pwsh
+        run: |
+          $dir = "out/Prizrak-Box-win32-${{ matrix.msiarch }}"
+          New-Item -ItemType Directory -Force -Path "$dir/resources" | Out-Null
+          Copy-Item "src-rs/target/${{ matrix.target }}/release/prizrak-box.exe" "$dir/Prizrak-Box.exe"
+          Copy-Item src-go/px.exe                 "$dir/resources/px.exe"
+          Copy-Item src-service/px-service.exe    "$dir/resources/px-service.exe"
+      - name: Install WiX Toolset
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip" -OutFile "wix.zip"
+          Expand-Archive -Path "wix.zip" -DestinationPath "C:\wix" -Force
+          "C:\wix" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Build MSI (installer/build-msi.js — same product chain as Wails, supersedes Electron)
+        shell: pwsh
+        env: { ARCH: '${{ matrix.msiarch }}', BUILD_TYPE: 'wails' }
+        run: |
+          $env:PATH = "C:\wix;$env:PATH"
+          npm install --no-audit --no-fund
+          node installer/build-msi.js
+          Copy-Item "out/msi/${{ matrix.msiarch }}/windows-${{ matrix.msiarch }}.msi" "windows-${{ matrix.arch }}.msi"
+      - name: Stage portable zip
+        shell: pwsh
+        run: Compress-Archive -Path "out/Prizrak-Box-win32-${{ matrix.msiarch }}/*" -DestinationPath "windows-${{ matrix.arch }}.zip" -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rs-windows-${{ matrix.arch }}
+          path: |
+            windows-${{ matrix.arch }}.msi
+            windows-${{ matrix.arch }}.zip
+      - name: Cancel workflow on failure
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
+
+  # ── Rust + Slint (TEST) Linux — deb + rpm + Arch package via nfpm ──
+  build_linux_rs:
+    needs: [setup]
+    if: (github.event_name == 'release' || inputs.build_linux == true) && (github.event_name == 'release' || inputs.build_rust == true)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with: { node-version: '22' }
+      - uses: actions/setup-go@v6
+        with: { go-version: '1.26', check-latest: true }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: 'src-rs -> target', key: 'linux-${{ matrix.arch }}' }
+      - name: Set Version
+        run: echo "VERSION=${{ needs.setup.outputs.version }}" >> $GITHUB_ENV
+      - name: Sync VERSION to package.json
+        run: node build/sync-version.js
+      - name: Install build dependencies (GTK3 + AppIndicator for the tray, fontconfig, xkbcommon)
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libgtk-3-dev libayatana-appindicator3-dev libfontconfig1-dev libxkbcommon-dev libssl-dev
+      - name: Refresh geo/model data
+        run: |
+          wget -qO src-go/internal/em/Model.bin        --tries=4 --waitretry=5 --header="Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin
+          wget -qO src-go/internal/em/geoip.metadb     --tries=4 --waitretry=5 --header="Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb
+          wget -qO src-go/internal/em/GeoSite.dat      --tries=4 --waitretry=5 --header="Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat
+          wget -qO src-go/internal/em/BundleMRS.7z     --tries=4 --waitretry=5 --header="Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/BundleMRS.7z
+          wget -qO src-go/internal/em/GeoLite2-ASN.mmdb --tries=4 --waitretry=5 --header="Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/GeoLite2-ASN.mmdb
+      - name: Build px + px-service
+        env: { GOARCH: '${{ matrix.arch }}' }
+        run: |
+          (cd src-go && CGO_ENABLED=0 go build -tags=with_gvisor -trimpath -ldflags="-s -w -X github.com/legiz-ru/prizrak-box/api.Version=${{ env.VERSION }}" -o px .)
+          (cd src-service && CGO_ENABLED=0 go build -ldflags="-s -w" -o px-service .)
+      - name: Build Rust + Slint app
+        run: |
+          cd src-rs
+          cargo build --release --locked
+      - name: Package deb + rpm + Arch (nfpm)
+        run: |
+          set -e
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+          NFPM="$(go env GOPATH)/bin/nfpm"
+          export PKG_ARCH='${{ matrix.arch }}'
+          export PKG_VERSION="$(node -p "require('./package.json').version")"
+          CFG=src-rs/packaging/linux/nfpm.yaml
+          "$NFPM" pkg -p deb       -f "$CFG" -t "linux-${{ matrix.arch }}.deb"
+          "$NFPM" pkg -p rpm       -f "$CFG" -t "linux-${{ matrix.arch }}.rpm"
+          PKG_VERSION="${PKG_VERSION//-/_}" "$NFPM" pkg -p archlinux -f "$CFG" -t "linux-${{ matrix.arch }}-aur.tar.zst"
+      - name: Validate Release Assets
+        run: |
+          set -e
+          missing=0
+          for file in "linux-${{ matrix.arch }}.deb" "linux-${{ matrix.arch }}.rpm" "linux-${{ matrix.arch }}-aur.tar.zst"; do
+            if [ ! -s "$file" ]; then
+              echo "Missing or empty Rust Linux artifact: $file" >&2
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || { ls -la; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rs-linux-${{ matrix.arch }}
+          path: |
+            linux-${{ matrix.arch }}.deb
+            linux-${{ matrix.arch }}.rpm
+            linux-${{ matrix.arch }}-aur.tar.zst
+      - name: Cancel workflow on failure
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
+
   # ── Release: upload artifacts and update release body ──
   release:
-    needs: [setup, build_android, build_windows, build_linux, build_macos, build_windows_wails, build_macos_wails, build_linux_wails]
+    needs: [setup, build_android, build_windows, build_linux, build_macos, build_windows_wails, build_macos_wails, build_linux_wails, build_windows_rs, build_macos_rs, build_linux_rs]
     # Run only if no build job failed; skipped jobs are tolerated (user may disable some platforms).
     # publish_aur runs after this job (it needs the uploaded assets) and is
     # non-fatal: the AUR is a third-party service whose outages must not block
@@ -1406,7 +1698,10 @@ jobs:
       needs.build_macos.result != 'failure' &&
       needs.build_windows_wails.result != 'failure' &&
       needs.build_macos_wails.result != 'failure' &&
-      needs.build_linux_wails.result != 'failure'
+      needs.build_linux_wails.result != 'failure' &&
+      needs.build_windows_rs.result != 'failure' &&
+      needs.build_macos_rs.result != 'failure' &&
+      needs.build_linux_rs.result != 'failure'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -1499,7 +1794,7 @@ jobs:
                 </thead>
                 <tbody align=left>
                     <tr>
-                        <td colspan="2" align="center"><strong>Wails Builds</strong></td>
+                        <td colspan="2" align="center"><strong>Rust + Slint</strong></td>
                     </tr>
                     <tr>
                         <td>Windows</td>
@@ -1520,6 +1815,17 @@ jobs:
                         </td>
                     </tr>
                     <tr>
+                        <td>Linux</td>
+                        <td>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-amd64.deb"><img src="https://img.shields.io/badge/DebPackage-x64-FF9966.svg?logo=debian"></a>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-amd64.rpm"><img src="https://img.shields.io/badge/RpmPackage-x64-F1B42F.svg?logo=redhat"></a>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-amd64-aur.tar.zst"><img src="https://img.shields.io/badge/ArchPackage-x64-1793D1.svg?logo=archlinux"></a><br>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-arm64.deb"><img src="https://img.shields.io/badge/DebPackage-arm64-FF9966.svg?logo=debian"></a>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-arm64.rpm"><img src="https://img.shields.io/badge/RpmPackage-arm64-F1B42F.svg?logo=redhat"></a>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-arm64-aur.tar.zst"><img src="https://img.shields.io/badge/ArchPackage-arm64-1793D1.svg?logo=archlinux"></a>
+                        </td>
+                    </tr>
+                    <tr>
                         <td colspan="2" align="center"><strong>Android</strong></td>
                     </tr>
                     <tr>
@@ -1533,29 +1839,48 @@ jobs:
                         </td>
                     </tr>
                     <tr>
-                        <td colspan="2" align="center"><strong>Linux</strong></td>
+                        <td colspan="2" align="center"><strong>Wails — will be removed soon / скоро будет удалён</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Windows</td>
+                        <td>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/windows-amd64-wails.msi"><img src="https://img.shields.io/badge/Setup-x64-2d7d9a.svg?logo=wattpad"></a><br>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/windows-arm64-wails.msi"><img src="https://img.shields.io/badge/Setup-arm-2d7d9a.svg?logo=wattpad"></a><br>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/windows-amd64-wails.zip"><img src="https://img.shields.io/badge/Portable-x64-67b7d1.svg?logo=wattpad"></a><br>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/windows-arm64-wails.zip"><img src="https://img.shields.io/badge/Portable-arm-67b7d1.svg?logo=wattpad"></a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>macOS</td>
+                        <td>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/macos-arm64-wails.dmg"><img src="https://img.shields.io/badge/DMG-Apple%20Silicon-%23000000.svg?logo=apple"></a><br>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/macos-amd64-wails.dmg"><img src="https://img.shields.io/badge/DMG-Intel%20X64-%2300A9E0.svg?logo=apple"></a><br>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/macos-arm64-wails.zip"><img src="https://img.shields.io/badge/ZIP-Apple%20Silicon-%23000000.svg?logo=apple"></a><br>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/macos-amd64-wails.zip"><img src="https://img.shields.io/badge/ZIP-Intel%20X64-%2300A9E0.svg?logo=apple"></a>
+                        </td>
                     </tr>
                     <tr>
                         <td>Linux</td>
                         <td>
-                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-amd64.deb"><img src="https://img.shields.io/badge/DebPackage-x64-FF9966.svg?logo=debian"></a><br>
-                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-amd64.rpm"><img src="https://img.shields.io/badge/RpmPackage-x64-F1B42F.svg?logo=redhat"></a><br>
-                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-arm64.deb"><img src="https://img.shields.io/badge/DebPackage-arm64-FF9966.svg?logo=debian"></a><br>
-                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-arm64.rpm"><img src="https://img.shields.io/badge/RpmPackage-arm64-F1B42F.svg?logo=redhat"></a><br>
-                            <a href="https://aur.archlinux.org/packages/prizrak-box-bin"><img src="https://img.shields.io/aur/version/prizrak-box-bin?logo=archlinux"></a>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="2" align="center"><strong>Linux Wails TEST</strong></td>
-                    </tr>
-                    <tr>
-                        <td colspan="2">
                             <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-amd64-wails.deb"><img src="https://img.shields.io/badge/DebPackage-x64-FF9966.svg?logo=debian"></a>
                             <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-amd64-wails.rpm"><img src="https://img.shields.io/badge/RpmPackage-x64-F1B42F.svg?logo=redhat"></a>
                             <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-amd64-aur-wails.tar.zst"><img src="https://img.shields.io/badge/ArchPackage-x64-1793D1.svg?logo=archlinux"></a><br>
                             <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-arm64-wails.deb"><img src="https://img.shields.io/badge/DebPackage-arm64-FF9966.svg?logo=debian"></a>
                             <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-arm64-wails.rpm"><img src="https://img.shields.io/badge/RpmPackage-arm64-F1B42F.svg?logo=redhat"></a>
                             <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-arm64-aur-wails.tar.zst"><img src="https://img.shields.io/badge/ArchPackage-arm64-1793D1.svg?logo=archlinux"></a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" align="center"><strong>Electron — will be removed soon / скоро будет удалён</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Linux</td>
+                        <td>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-amd64-electron.deb"><img src="https://img.shields.io/badge/DebPackage-x64-FF9966.svg?logo=debian"></a>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-amd64-electron.rpm"><img src="https://img.shields.io/badge/RpmPackage-x64-F1B42F.svg?logo=redhat"></a><br>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-arm64-electron.deb"><img src="https://img.shields.io/badge/DebPackage-arm64-FF9966.svg?logo=debian"></a>
+                            <a href="https://github.com/${owner}/${repo}/releases/download/${tag}/linux-arm64-electron.rpm"><img src="https://img.shields.io/badge/RpmPackage-arm64-F1B42F.svg?logo=redhat"></a><br>
+                            <a href="https://aur.archlinux.org/packages/prizrak-box-bin"><img src="https://img.shields.io/aur/version/prizrak-box-bin?logo=archlinux"></a>
                         </td>
                     </tr>
                 </tbody>

@@ -7,6 +7,8 @@ import { Tabs, TabItem, Steps } from '@astrojs/starlight/components';
 
 All releases are available on GitHub: [latest stable](https://github.com/legiz-ru/Prizrak-Box/releases/latest) · [all releases including pre-releases](https://github.com/legiz-ru/Prizrak-Box/releases).
 
+On Windows, macOS and Linux the files without a suffix (e.g. `windows-amd64.msi`, `macos-arm64.dmg`, `linux-amd64.deb`) are the main Prizrak-Box build. Files ending in `-wails` or `-electron` are the previous builds — they are still published for now but will be removed soon.
+
 <Tabs>
   <TabItem label="Android">
 
@@ -48,8 +50,12 @@ The APK includes a built-in update checker — it will notify you when a new rel
 
 <Steps>
 1. Go to the [latest stable release](https://github.com/legiz-ru/Prizrak-Box/releases/latest) or [all releases (including pre-releases)](https://github.com/legiz-ru/Prizrak-Box/releases).
-2. Download the `.msi` installer (e.g. `windows-amd64-wails.msi`, also shown as the **Setup x64** download button).
-3. Run the installer — administrator confirmation will be required.
+2. Download the `.msi` installer for your PC:
+   - `windows-amd64.msi` — x64 (most PCs), the **Setup x64** download button
+   - `windows-arm64.msi` — ARM (e.g. Snapdragon), the **Setup arm** button
+
+   A portable build without installation is also available: `windows-amd64.zip` / `windows-arm64.zip`.
+3. Run the installer — administrator confirmation will be required. The installer also sets up the service that TUN mode uses, and upgrades an installed older version in place.
 4. Launch **Prizrak-Box** from the Start menu or desktop shortcut.
 5. Adding a provider configuration: click **Add** in the profiles menu and enter your subscription URL. One-click automatic configuration from your provider's portal is also supported.
 </Steps>
@@ -67,10 +73,10 @@ Windows Defender may show a SmartScreen warning on first launch. Click **More in
 
 <Steps>
 1. Go to the [latest stable release](https://github.com/legiz-ru/Prizrak-Box/releases/latest) or [all releases (including pre-releases)](https://github.com/legiz-ru/Prizrak-Box/releases).
-2. Download the `.dmg` file for your Mac:
-   - `macos-arm64-wails.dmg` — Apple Silicon
-   - `macos-amd64-wails.dmg` — Intel
-3. Open the `.dmg` and drag **Prizrak-Box** to your Applications folder.
+2. Download the `.dmg` file for your Mac (macOS 12 Monterey or later):
+   - `macos-arm64.dmg` — Apple Silicon
+   - `macos-amd64.dmg` — Intel
+3. Open the `.dmg` and drag **Prizrak-Box** to your Applications folder. If asked whether to replace an existing copy, click **Replace** — settings and profiles are kept.
 4. On first launch macOS will ask you to confirm opening — click **Open**.
 5. Adding a provider configuration: click **Add** in the profiles menu and enter your subscription URL. One-click automatic configuration from your provider's portal is also supported.
 </Steps>
@@ -78,7 +84,14 @@ Windows Defender may show a SmartScreen warning on first launch. Click **More in
 ![Install on macOS](../../assets/install-mac.webp)
 
 :::caution
-macOS requires granting **Network Extension** permissions for the TUN mode to work. Follow the system prompt after first launch.
+If macOS says that **Prizrak-Box is damaged** or that **the developer cannot be verified** (builds that are not signed with a Developer ID), run in Terminal:
+```bash
+xattr -dr com.apple.quarantine /Applications/Prizrak-Box.app
+```
+:::
+
+:::note
+TUN mode needs the Prizrak-Box service: install it in **Settings → Application → Service Mode → Install Service** and confirm with your administrator password.
 :::
 
   </TabItem>
@@ -89,26 +102,34 @@ macOS requires granting **Network Extension** permissions for the TUN mode to wo
 <Steps>
 1. Go to the [latest stable release](https://github.com/legiz-ru/Prizrak-Box/releases/latest) or [all releases (including pre-releases)](https://github.com/legiz-ru/Prizrak-Box/releases).
 2. Download the package for your architecture and distribution:
-   - amd64 (x86_64): `linux-amd64.deb` or `linux-amd64.rpm`
-   - arm64: `linux-arm64.deb` or `linux-arm64.rpm`
-3. Install the downloaded package:
+   - amd64 (x86_64): `linux-amd64.deb`, `linux-amd64.rpm` or `linux-amd64-aur.tar.zst` (Arch)
+   - arm64: `linux-arm64.deb`, `linux-arm64.rpm` or `linux-arm64-aur.tar.zst` (Arch)
+3. Install the downloaded package from the folder you saved it to — the package manager pulls in the dependencies:
    - For `.deb` (Debian/Ubuntu and derivatives):
      ```bash
-     sudo dpkg -i linux-amd64.deb
+     sudo apt install ./linux-amd64.deb
      ```
-   - For `.rpm` (Fedora/openSUSE and derivatives):
+   - For `.rpm` (Fedora and derivatives):
      ```bash
-     sudo rpm -i linux-amd64.rpm
+     sudo dnf install ./linux-amd64.rpm
      ```
+     On openSUSE use `sudo zypper install ./linux-amd64.rpm`.
+   - For Arch Linux and derivatives:
+     ```bash
+     sudo pacman -U ./linux-amd64-aur.tar.zst
+     ```
+
+   The package also installs and starts the service that TUN mode uses.
 4. Launch **Prizrak-Box** from your application list.
 5. Adding a provider configuration: click **Add** in the profiles menu and enter your subscription URL. One-click automatic configuration from your provider's portal is also supported.
 </Steps>
 
 :::note[AUR]
-Arch Linux users can install from the AUR:
+Arch Linux users can also install from the AUR:
 ```bash
 yay -S prizrak-box-bin
 ```
+The AUR package is still the previous Electron build; it will switch to the main build later.
 :::
 
   </TabItem>

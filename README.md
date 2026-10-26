@@ -70,6 +70,18 @@ npm run package
 npm run start
 ```
 
+#### Native shell: Rust + Slint (TEST) | 原生外壳 | Нативная оболочка
+
+A web-engine-free desktop shell for the same `px` / `px-service` backend lives
+in [`src-rs`](src-rs/README.md) (Rust + Slint). Build it with:
+无 Web 引擎的原生桌面外壳位于 `src-rs`。
+Нативная оболочка без веб-движка — в `src-rs`.
+
+```bash
+cd src-rs
+cargo run --release
+```
+
 #### Service Mode (Optional) | 服务模式（可选）| Режим сервиса (опционально)
 
 The service allows TUN mode to work without running the app as administrator.

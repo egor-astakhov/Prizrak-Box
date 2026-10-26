@@ -21,6 +21,10 @@ import createApi from "@/api";
 
 const {proxy} = getCurrentInstance()!;
 const api = createApi(proxy);
+// Stores first: watchers further down read connectionStore while the
+// component is being set up (a const used before its declaration throws).
+const webStore = useWebStore()
+const connectionStore = useConnectionStore()
 
 const {t} = useI18n()
 // Relative age ("3 мин назад") with the exact start time in the tooltip.
@@ -342,9 +346,6 @@ async function copyLog(item?: any) {
     toast('error', t('copy.fail'))
   }
 }
-
-const webStore = useWebStore()
-const connectionStore = useConnectionStore()
 
 // ── Process view ──────────────────────────────────────────────────────────────
 const selectedProcess = ref<string | null>(null)

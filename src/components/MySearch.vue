@@ -33,13 +33,13 @@ const selectedProxy = ref(proxiesStore.now || '');
 const groupDd = ref<InstanceType<typeof UiDropdown> | null>(null);
 const proxyDd = ref<InstanceType<typeof UiDropdown> | null>(null);
 
-// Load groups
-async function loadGroups() {
+// Load groups; false when px could not be asked (e.g. still reloading).
+async function loadGroups(): Promise<boolean> {
   if (!webStore.fProfile || !(webStore.fProfile as any)['id']) {
     groupList.value = [];
     selectedGroup.value = '';
     proxiesStore.setActive('');
-    return;
+    return true;
   }
   try {
     const groups = await api.getGroups();
@@ -51,9 +51,13 @@ async function loadGroups() {
     } else if (groups.length > 0) {
       selectedGroup.value = groups[0].name;
       proxiesStore.setActive(groups[0].name);
+    } else {
+      selectedGroup.value = '';
     }
+    return true;
   } catch (error) {
     console.error('Failed to load groups:', error);
+    return false;
   }
 }
 
@@ -170,12 +174,29 @@ const currentProxy = computed(() => proxyList.value.find(p => p.now));
 const currentProxyName = computed(() =>
     withFlag((currentProxy.value?.displayName ?? currentProxy.value?.name ?? selectedProxy.value) || '') || t('ui.not-selected'));
 
+// Every reload bumps this; an older reload that finishes later is ignored.
+let reloadSeq = 0;
+
+// The header must always show the active profile's group/proxy. A switch
+// clears the local selection too (the store watcher ignores empty values),
+// and the groups are re-read until px answers: right after a switch px may
+// still be reloading the config, and a failed read used to leave the
+// previous profile's group on screen.
 const handleProfileChanged = async () => {
+  const seq = ++reloadSeq;
   proxiesStore.setActive('');
   proxiesStore.setNow('');
+  selectedGroup.value = '';
+  selectedProxy.value = '';
+  groupList.value = [];
+  proxyList.value = [];
   groupDd.value?.close();
   proxyDd.value?.close();
-  await loadGroups();
+  for (let attempt = 0; attempt < 5 && seq === reloadSeq; attempt++) {
+    if (await loadGroups()) break;
+    await new Promise((resolve) => setTimeout(resolve, 600));
+  }
+  if (seq !== reloadSeq) return;
   await loadProxies();
 };
 
@@ -215,6 +236,12 @@ onUnmounted(() => {
   window.removeEventListener('profile-changed', handleProfileChanged as EventListener);
   Events.Off("proxyChanged", handleProxyChangedEvent);
   Events.Off("profileChanged", handleProfileChangedEvent);
+});
+
+// The active profile can also change without a "profile-changed" event
+// (startup, tray, deep link, another shell): follow it as well.
+watch(() => (webStore.fProfile as any)?.id, (id, prev) => {
+  if (id !== prev) void handleProfileChanged();
 });
 
 // Watch for store changes from other components (e.g. Proxies.vue).

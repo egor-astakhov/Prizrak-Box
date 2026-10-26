@@ -174,6 +174,23 @@
                   Impersonate="no"
                   Return="ignore" />
 
+    <!-- Clear the user's system proxy left on the port of the px killed above
+         (script and conditions: RELEASE_USER_PROXY_PS in installer/build-msi.js).
+         Impersonated, so HKCU is the user running the setup. Scheduled twice,
+         after each process kill: uninstall and install/upgrade. -->
+    <CustomAction Id="ReleaseUserProxyOnInstall"
+                  Directory="TARGETDIR"
+                  ExeCommand='powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand $(var.ReleaseUserProxyCmd)'
+                  Execute="deferred"
+                  Impersonate="yes"
+                  Return="ignore" />
+    <CustomAction Id="ReleaseUserProxyOnUninstall"
+                  Directory="TARGETDIR"
+                  ExeCommand='powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand $(var.ReleaseUserProxyCmd)'
+                  Execute="deferred"
+                  Impersonate="yes"
+                  Return="ignore" />
+
     <?ifdef Wails ?>
     <!-- Best-effort removal of an old per-user Squirrel install (the v1.0.20
          windows-*-Setup.exe, installed to %LOCALAPPDATA%\Prizrak-Box). Runs
@@ -209,6 +226,9 @@
       <Custom Action="StopProcessesBeforeInstall" Before="InstallFiles">
         NOT REMOVE
       </Custom>
+      <Custom Action="ReleaseUserProxyOnInstall" After="StopProcessesBeforeInstall">
+        NOT REMOVE
+      </Custom>
 
       <?ifdef Wails ?>
       <!-- After RemoveExistingProducts (removes the Electron MSI) and before the
@@ -229,6 +249,9 @@
 
       <!-- Stop processes/services before removing files -->
       <Custom Action="StopProcessesBeforeUninstall" Before="RemoveFiles">
+        <![CDATA[REMOVE="ALL"]]>
+      </Custom>
+      <Custom Action="ReleaseUserProxyOnUninstall" After="StopProcessesBeforeUninstall">
         <![CDATA[REMOVE="ALL"]]>
       </Custom>
     </InstallExecuteSequence>
