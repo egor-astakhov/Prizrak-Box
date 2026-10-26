@@ -156,7 +156,7 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/metacubex/mihomo => github.com/legiz-ru/Prizrak-Core v1.19.33-r2
+replace github.com/metacubex/mihomo => github.com/legiz-ru/Prizrak-Core v1.19.33-r3
 
 replace github.com/metacubex/utls => github.com/legiz-ru/prizrak-utls v0.0.0-20261022072945-d5656b84bb52
 
