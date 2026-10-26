@@ -138,7 +138,7 @@ The `subscriptionTemplate` value (`SmartPrizrak` in the example) must match the 
 configured in your Remnawave panel.
 
 For details on the Smart proxy group type and its configuration parameters,
-see [Smart Proxy Group](/for-devs/smart-proxy-group/).
+see [Smart Proxy Group](/prizrak-core/smart-proxy-group/).
 
 ---
 
@@ -229,7 +229,7 @@ Make sure **Mihomo** is not checked in **Exclude from subscription type**, other
 
 ### mux.cool Multiplexing
 
-Prizrak-Core supports [mux.cool multiplexing](/prizrak-core/#muxcool-xray-mux), compatible with Xray. Xray servers managed by Remnawave need no extra setup: they accept mux.cool on their own.
+Prizrak-Core supports [mux.cool multiplexing](/prizrak-core/mux-cool/), compatible with Xray. Xray servers managed by Remnawave need no extra setup: they accept mux.cool on their own.
 
 ```json
 {
@@ -274,7 +274,7 @@ Do not enable `mux.cool` and `smux` on the same proxy. Clients on regular Mihomo
 
 ### REALITY ML-DSA-65
 
-If `mldsa65Seed` is set in the REALITY inbound of an Xray server, the server signs the REALITY certificate with a post-quantum ML-DSA-65 signature. Prizrak-Core [verifies this signature](/prizrak-core/#reality-ml-dsa-65-and-xray-compatibility) when the proxy's `reality-opts` contain the public key `mldsa65-verify`.
+If `mldsa65Seed` is set in the REALITY inbound of an Xray server, the server signs the REALITY certificate with a post-quantum ML-DSA-65 signature. Prizrak-Core [verifies this signature](/prizrak-core/reality/) when the proxy's `reality-opts` contain the public key `mldsa65-verify`.
 
 Put the ML-DSA-65 public key in base64url format into `value`. It is the `mldsa65Verify` value that `xray mldsa65` prints together with the inbound's `mldsa65Seed`.
 
@@ -309,9 +309,55 @@ proxies:
 The key must match the server's `mldsa65Seed`. If the key is wrong or ML-DSA-65 is not enabled on the server, Prizrak-Core rejects the REALITY certificate and does not connect.
 </Aside>
 
+### finalmask
+
+When the inbound of the Xray server has a `finalmask` block, the client needs the same masks. Prizrak-Core supports [finalmask](/prizrak-core/finalmask/) on `vless` and `trojan` proxies. The rule writes the whole block into the `finalmask` key of the host's proxy; put the masks of the inbound's `finalmask` into `value`, with the keys renamed mihomo-style (`randRange` → `rand-range` and so on).
+
+```json
+{
+  "xrayJson": [],
+  "mihomo": [
+    {
+      "op": "set",
+      "value": {
+        "tcp": [
+          {
+            "type": "fragment",
+            "packets": "tlshello",
+            "lengths": ["1-1"],
+            "delays": ["0"]
+          }
+        ]
+      },
+      "to": "['finalmask']"
+    }
+  ],
+  "base64": []
+}
+```
+
+In the Mihomo subscription the proxy gets this block:
+
+```yaml
+proxies:
+  - name: 🇩🇪 Germany
+    type: vless
+    # ...
+    finalmask:
+      tcp:
+        - type: fragment
+          packets: tlshello
+          lengths: ["1-1"]
+          delays: ["0"]
+```
+
+<Aside type="caution">
+Clients on regular Mihomo ignore the `finalmask` key and cannot connect to a masked server. Enable the masks only on hosts used by Prizrak-Core clients.
+</Aside>
+
 ### XHTTP Flow Control (h2-flow)
 
-For hosts with the XHTTP transport, Prizrak-Core can enable the [HTTP/2 flow governor](/prizrak-core/#http2-flow-governor-h2-flow). With it, the server sends data no faster than the client reads it and does not fill large HTTP/2 windows. This lowers memory use on the client and helps on weak devices. The Xray server needs no setup: the governor works on the client side through standard HTTP/2 flow control. If the server runs [Jolymmiles/Xray-core](https://github.com/Jolymmiles/Xray-core) with its own governor (`h2Flow`), the two work together, and the governor can be on either side or on both.
+For hosts with the XHTTP transport, Prizrak-Core can enable the [HTTP/2 flow governor](/prizrak-core/xhttp/#http2-flow-governor-h2-flow). With it, the server sends data no faster than the client reads it and does not fill large HTTP/2 windows. This lowers memory use on the client and helps on weak devices. The Xray server needs no setup: the governor works on the client side through standard HTTP/2 flow control. If the server runs [Jolymmiles/Xray-core](https://github.com/Jolymmiles/Xray-core) with its own governor (`h2Flow`), the two work together, and the governor can be on either side or on both.
 
 The governor is off by default and works only in h2 mode, that is ALPN `h2` or an empty ALPN. With ALPN `h3` or `http/1.1` the option has no effect.
 

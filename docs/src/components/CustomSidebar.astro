@@ -27,12 +27,17 @@ const iconByPath: Record<string, IconName> = {
 
 const localePrefix = locale ? '/' + locale : '';
 
+function stripLocale(href: string): string {
+	return href.startsWith(localePrefix + '/') ? href.slice(localePrefix.length) : href;
+}
+
+/** A group takes the icon of its first page when that page has one. */
 function iconFor(entry: Entry): IconName {
-	if (entry.type === 'group') return 'code';
-	const path = entry.href.startsWith(localePrefix + '/')
-		? entry.href.slice(localePrefix.length)
-		: entry.href;
-	return iconByPath[path] ?? (/^https?:/.test(entry.href) ? 'external-link' : 'file-text');
+	if (entry.type === 'group') {
+		const first = entry.entries.find((e) => e.type === 'link');
+		return (first && first.type === 'link' && iconByPath[stripLocale(first.href)]) || 'code';
+	}
+	return iconByPath[stripLocale(entry.href)] ?? (/^https?:/.test(entry.href) ? 'external-link' : 'file-text');
 }
 
 /** Link attributes without `class`, which goes through class:list instead. */

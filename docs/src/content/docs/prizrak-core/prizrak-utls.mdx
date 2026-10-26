@@ -1,0 +1,27 @@
+---
+title: "uTLS: prizrak-utls"
+description: "The uTLS fork in Prizrak-Core: up-to-date Chrome 155, Firefox 148, Safari 26.3 fingerprints and what client-fingerprint means."
+---
+
+uTLS is the library that makes the TLS fingerprint (ClientHello) look like a real browser. It decides which browser a connection looks like for `client-fingerprint` and REALITY.
+
+mihomo uses [metacubex/utls](https://github.com/metacubex/utls) v1.8.8. Prizrak-Core uses its own fork [legiz-ru/prizrak-utls](https://github.com/legiz-ru/prizrak-utls) (branch `v1.9.0-mod-meta-mldsa-chr155`). It consists of three parts:
+
+1. **Base**: the metacubex `v1.9.0-mod-meta` branch. It is a newer line than v1.8.8 in mihomo and carries all metacubex changes.
+2. **Up-to-date upstream [refraction-networking/utls](https://github.com/refraction-networking/utls)**: sync with `crypto/tls` from Go 1.27.1, the Chrome 155 fingerprint, fixes for compressed certificate decompression, GREASE and PSK fixes, MLKEM1024 key exchange. The fork still builds with Go 1.20.
+3. **REALITY ML-DSA-65**: see [REALITY](/prizrak-core/reality/).
+
+## Which browser `client-fingerprint` means
+
+| `client-fingerprint` | mihomo | Prizrak-Core |
+|----------------------|--------|--------------|
+| `chrome` | Chrome 133 | **Chrome 155** |
+| `firefox` | Firefox 120 | **Firefox 148** |
+| `safari` | Safari 16.0 | **Safari 26.3** |
+| `ios`, `android`, `edge`, `360`, `qq` | unchanged | unchanged |
+
+In Prizrak-Core the `firefox` and `safari` fingerprints also carry the post-quantum `X25519MLKEM768` key exchange, as real browsers of these versions do. In mihomo only `chrome` has it.
+
+:::note
+If a server does not understand the new fingerprints, pick an older one explicitly: `chrome120`, `firefox120` or `safari16`.
+:::

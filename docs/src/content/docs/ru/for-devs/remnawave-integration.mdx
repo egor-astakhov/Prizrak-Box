@@ -138,7 +138,7 @@ Prizrak-Box представляется заголовком `User-Agent` сл�
 настроенного в панели Remnawave.
 
 Подробнее о типе прокси группы Smart и параметрах её конфигурации — в разделе
-[Прокси группа Smart](/ru/for-devs/smart-proxy-group/).
+[Прокси группа Smart](/ru/prizrak-core/smart-proxy-group/).
 
 ---
 
@@ -229,7 +229,7 @@ Prizrak-Box работает на ядре [Prizrak-Core](/ru/prizrak-core/). В
 
 ### Мультиплексирование mux.cool
 
-Prizrak-Core поддерживает [мультиплексирование mux.cool](/ru/prizrak-core/#muxcool-xray-mux), совместимое с Xray. Серверам Xray, которыми управляет Remnawave, дополнительная настройка не нужна: они принимают mux.cool сами.
+Prizrak-Core поддерживает [мультиплексирование mux.cool](/ru/prizrak-core/mux-cool/), совместимое с Xray. Серверам Xray, которыми управляет Remnawave, дополнительная настройка не нужна: они принимают mux.cool сами.
 
 ```json
 {
@@ -274,7 +274,7 @@ proxies:
 
 ### REALITY ML-DSA-65
 
-Если в REALITY-инбаунде сервера Xray задан `mldsa65Seed`, сервер подписывает сертификат REALITY постквантовой подписью ML-DSA-65. Prizrak-Core [проверяет эту подпись](/ru/prizrak-core/#reality-ml-dsa-65-и-совместимость-с-xray), если в `reality-opts` прокси указан публичный ключ `mldsa65-verify`.
+Если в REALITY-инбаунде сервера Xray задан `mldsa65Seed`, сервер подписывает сертификат REALITY постквантовой подписью ML-DSA-65. Prizrak-Core [проверяет эту подпись](/ru/prizrak-core/reality/), если в `reality-opts` прокси указан публичный ключ `mldsa65-verify`.
 
 В `value` укажите публичный ключ ML-DSA-65 в формате base64url. Это значение `mldsa65Verify`, которое `xray mldsa65` выводит вместе с `mldsa65Seed` для инбаунда.
 
@@ -309,9 +309,55 @@ proxies:
 Ключ должен соответствовать `mldsa65Seed` сервера. Если ключ неверный или на сервере ML-DSA-65 не включён, Prizrak-Core не примет сертификат REALITY и не подключится.
 </Aside>
 
+### finalmask
+
+Если во входящем соединении сервера Xray задан блок `finalmask`, клиенту нужны те же маски. Prizrak-Core поддерживает [finalmask](/ru/prizrak-core/finalmask/) для прокси `vless` и `trojan`. Правило записывает блок целиком в ключ `finalmask` прокси этого хоста; в `value` перенесите маски из `finalmask` входящего соединения, переименовав ключи в стиль mihomo (`randRange` → `rand-range` и так далее).
+
+```json
+{
+  "xrayJson": [],
+  "mihomo": [
+    {
+      "op": "set",
+      "value": {
+        "tcp": [
+          {
+            "type": "fragment",
+            "packets": "tlshello",
+            "lengths": ["1-1"],
+            "delays": ["0"]
+          }
+        ]
+      },
+      "to": "['finalmask']"
+    }
+  ],
+  "base64": []
+}
+```
+
+В подписке Mihomo прокси получит такой блок:
+
+```yaml
+proxies:
+  - name: 🇩🇪 Germany
+    type: vless
+    # ...
+    finalmask:
+      tcp:
+        - type: fragment
+          packets: tlshello
+          lengths: ["1-1"]
+          delays: ["0"]
+```
+
+<Aside type="caution">
+Клиенты на обычном Mihomo ключ `finalmask` проигнорируют и к серверу с масками не подключатся. Включайте маски только для хостов, которыми пользуются клиенты на Prizrak-Core.
+</Aside>
+
 ### Регулятор потока XHTTP (h2-flow)
 
-Для хостов с транспортом XHTTP Prizrak-Core умеет включать [регулятор потока HTTP/2](/ru/prizrak-core/#регулятор-потока-http2-h2-flow). С ним сервер присылает данные не быстрее, чем клиент их читает, и не заполняет большие окна HTTP/2. Это снижает расход памяти на клиенте и помогает на слабых устройствах. Сервер Xray настраивать не нужно: регулятор работает на стороне клиента через стандартное управление потоком HTTP/2. Если на сервере стоит [Jolymmiles/Xray-core](https://github.com/Jolymmiles/Xray-core) со своим регулятором (`h2Flow`), они работают вместе, и включать регулятор можно с любой стороны или с обеих.
+Для хостов с транспортом XHTTP Prizrak-Core умеет включать [регулятор потока HTTP/2](/ru/prizrak-core/xhttp/#регулятор-потока-http2-h2-flow). С ним сервер присылает данные не быстрее, чем клиент их читает, и не заполняет большие окна HTTP/2. Это снижает расход памяти на клиенте и помогает на слабых устройствах. Сервер Xray настраивать не нужно: регулятор работает на стороне клиента через стандартное управление потоком HTTP/2. Если на сервере стоит [Jolymmiles/Xray-core](https://github.com/Jolymmiles/Xray-core) со своим регулятором (`h2Flow`), они работают вместе, и включать регулятор можно с любой стороны или с обеих.
 
 Регулятор выключен по умолчанию и действует только в режиме h2. Это ALPN `h2` или пустой ALPN. При ALPN `h3` или `http/1.1` параметр ни на что не влияет.
 

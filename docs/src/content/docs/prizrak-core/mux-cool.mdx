@@ -1,0 +1,27 @@
+---
+title: "mux.cool (Xray Mux)"
+description: "mux.cool multiplexing (Xray Mux, XUDP) in Prizrak-Core: client, server and options."
+---
+
+Prizrak-Core supports **mux.cool** multiplexing compatible with Xray. It is the same protocol as `mux` in Xray-core: TCP streams and UDP/XUDP sessions share TCP connections. The implementation comes from [MetaCubeX/mihomo#2980](https://github.com/MetaCubeX/mihomo/pull/2980); it is more extensive than the one in Xray-core and fully compatible with it.
+
+- **Client.** Enabled per proxy, separately from `smux`. Do not enable both.
+- **Server.** VLESS and VMess inbounds accept mux.cool from Xray clients.
+- **XUDP.** Dedicated UDP sessions, with control over their number and a policy for UDP/443.
+- **Connection limits.** You can limit how many TCP connections are opened in total, how many sessions run on each at once and how many sessions a connection carries over its lifetime, after which it is replaced with a new one.
+
+```yaml
+proxies:
+  - name: vless-mux
+    type: vless
+    # ...
+    mux.cool:
+      enabled: true
+      # max-carriers: 0           # maximum TCP connections, 0 means no limit
+      # max-concurrency: 8        # active sessions per connection
+      # max-connections: 128      # sessions over a connection's lifetime before rotation
+      # xudp-concurrency: 4       # dedicated XUDP sessions per connection, 0 shares the pool
+      # xudp-proxy-udp443: reject # reject | allow | skip: what to do with UDP/443
+```
+
+To enable mux.cool for Remnawave subscription users, use the Remnawave host mapper; see [mux.cool Multiplexing](/for-devs/remnawave-integration/#muxcool-multiplexing) on the Remnawave integration page.
